@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'">
+    <title>뉴스클리핑 자동 전송 설정</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-icon {
+            font-size: 28px;
+        }
+
+        .create-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .create-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 30px;
+            min-height: 300px;
+        }
+
+        .clipping-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .clipping-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .clipping-item:hover {
+            background: white;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+        }
+
+        .clipping-info {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .clipping-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #212529;
+        }
+
+        .clipping-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+            font-size: 13px;
+            color: #6c757d;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 12px;
+        }
+
+        .status-badge.on {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.off {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .article-count {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            font-weight: 600;
+            color: #667eea;
+            margin-top: 4px;
+        }
+
+        .clipping-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 26px;
+            background: #ccc;
+            border-radius: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            outline: none;
+        }
+
+        .toggle-switch.active {
+            background: #667eea;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-switch.active::after {
+            left: 24px;
+        }
+
+        .btn-action {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-size: 13px;
+        }
+
+        .btn-open {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-open:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-delete {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .btn-delete:hover {
+            background: #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            color: #212529;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        .empty-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .empty-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+
+            .clipping-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .clipping-actions {
+                width: 100%;
+            }
+
+            .clipping-info {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <span class="header-icon">📰</span>
+                뉴스클리핑 자동 전송 설정
+            </h1>
+            <button class="create-btn" id="createBtn">
+                <span>➕</span>
+                <span>새로 생성</span>
+            </button>
+        </div>
+
+        <div class="content" id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>설정 목록을 불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API 기본 URL
+        const API_BASE = 'http://localhost:3001/api';
+
+        // 클리핑 목록 로드
+        async function loadClippings() {
+            try {
+                const response = await fetch(`${API_BASE}/clipping/list`);
+                const result = await response.json();
+
+                if (result.success && result.data.length > 0) {
+                    renderClippingList(result.data);
+                } else {
+                    renderEmptyState();
+                }
+            } catch (error) {
+                console.error('클리핑 목록 로드 오류:', error);
+                renderErrorState();
+            }
+        }
+
+        // 클리핑 목록 렌더링
+        function renderClippingList(clippings) {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="clipping-list">
+                    ${clippings.map(clipping => `
+                        <div class="clipping-item">
+                            <div class="clipping-info">
+                                <div>
+                                    <div class="clipping-name">${clipping.name}</div>
+                                    <div class="clipping-status">
+                                        <span class="status-badge ${clipping.is_active ? 'on' : 'off'}">
+                                            ${clipping.is_active ? '🟢 전송 중' : '🔴 일시중지'}
+                                        </span>
+                                        <span class="article-count">📊 기사 ${clipping.keywords.length * 5}개</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="clipping-actions">
+                                <button class="toggle-switch ${clipping.is_active ? 'active' : ''}" 
+                                    onclick="toggleClipping(${clipping.id})"
+                                    title="${clipping.is_active ? '일시중지' : '활성화'}">
+                                </button>
+                                <button class="btn-action btn-open" onclick="openClipping(${clipping.id})">
+                                    열기
+                                </button>
+                                <button class="btn-action btn-delete" onclick="deleteClipping(${clipping.id})">
+                                    삭제
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // 빈 상태 렌더링
+        function renderEmptyState() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📝</div>
+                    <h2>생성된 클리핑이 없습니다</h2>
+                    <p>새로운 뉴스클리핑을 만들어 자동 전송을 시작하세요</p>
+                    <button class="empty-btn" onclick="createNewClipping()">
+                        <span>➕</span>
+                        <span>새로 생성</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        // 오류 상태 렌더링
+        function renderErrorState() {
+            const content = document.getElementById('content');
+            content.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">⚠️</div>
+                    <h2>오류가 발생했습니다</h2>
+                    <p>클리핑 목록을 불러올 수 없습니다. 다시 시도해주세요.</p>
+                    <button class="empty-btn" onclick="loadClippings()">
+                        <span>🔄</span>
+                        <span>다시 시도</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        // 클리핑 토글
+        async function toggleClipping(clippingId) {
+            try {
+                const response = await fetch(`${API_BASE}/clipping/${clippingId}/toggle`, {
+                    method: 'PATCH'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    loadClippings();
+                } else {
+                    alert('상태 변경에 실패했습니다');
+                }
+            } catch (error) {
+                console.error('토글 오류:', error);
+                alert('오류가 발생했습니다');
+            }
+        }
+
+        // 클리핑 삭제
+        async function deleteClipping(clippingId) {
+            if (!confirm('정말 삭제하시겠습니까?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/clipping/${clippingId}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    loadClippings();
+                } else {
+                    alert('삭제에 실패했습니다');
+                }
+            } catch (error) {
+                console.error('삭제 오류:', error);
+                alert('오류가 발생했습니다');
+            }
+        }
+
+        // 클리핑 열기 (상세 설정 페이지)
+        function openClipping(clippingId) {
+            // 상세 설정 창 열기
+            window.open(
+                `/clipping-detail?id=${clippingId}`,
+                'clipping-detail',
+                'width=1200,height=800,menubar=no,toolbar=no'
+            );
+        }
+
+        // 새 클리핑 생성
+        function createNewClipping() {
+            // 새 클리핑 생성 창 열기
+            window.open(
+                '/clipping-detail',
+                'clipping-detail',
+                'width=1200,height=800,menubar=no,toolbar=no'
+            );
+        }
+
+        // 버튼 이벤트 리스너
+        document.getElementById('createBtn').addEventListener('click', createNewClipping);
+
+        // 페이지 로드 시 클리핑 목록 로드
+        window.addEventListener('DOMContentLoaded', loadClippings);
+
+        // 주기적 새로고침 (30초마다)
+        setInterval(loadClippings, 30000);
+    </script>
+</body>
+</html>

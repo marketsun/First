@@ -1,0 +1,56 @@
+{
+  "name": "google-naver-news-crawler",
+  "version": "2.0.0",
+  "description": "구글&네이버 뉴스 크롤러 - Electron 버전",
+  "main": "main.js",
+  "homepage": "./",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win portable --publish never",
+    "build:installer": "electron-builder --win nsis --publish never",
+    "pack": "electron-builder --dir",
+    "prestart": "npm install"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "dependencies": {
+    "electron-is-dev": "latest"
+  },
+  "build": {
+    "appId": "com.google-naver-crawler",
+    "productName": "구글&네이버 뉴스 크롤러",
+    "directories": {
+      "buildResources": "assets",
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "backend/**/*",
+      "public/**/*",
+      "static/**/*",
+      "app.py",
+      "requirements.txt",
+      "*.py"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}_${version}.exe"
+    }
+  }
+}
