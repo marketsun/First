@@ -783,11 +783,17 @@ async function copySelectedNews() {
         addLog('[함수종료] copySelectedNews() - 성공', 'debug');
         addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
         addLog(`✅ ${selectedNews.length}개 기사 복사 완료`, 'success');
+        
+        // 복사완료 토스트 표시
+        showToast('✅ 복사완료', 'success');
     } catch (error) {
         addLog(`├─ [에러] ${error.message}`, 'error');
         addLog('[함수종료] copySelectedNews() - 실패', 'debug');
         addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
         addLog(`❌ 복사 실패: ${error.message}`, 'error');
+        
+        // 복사실패 토스트 표시
+        showToast('❌ 복사 실패', 'error');
     }
 }
 
@@ -982,7 +988,7 @@ function renderClippings(clippings) {
                     <input type="checkbox" data-clipping-id="${c.id}" class="toggle-clipping" ${c.is_active ? 'checked' : ''}>
                     <span class="toggle-slider"></span>
                 </label>
-                <button data-clipping-id="${c.id}" class="btn-send-clipping">전송</button>
+                <button data-clipping-id="${c.id}" class="btn-send-clipping">지금전송</button>
                 <button data-clipping-id="${c.id}" class="btn-open-clipping">열기</button>
                 <button data-clipping-id="${c.id}" class="btn-delete-clipping">삭제</button>
             </div>
@@ -1140,6 +1146,26 @@ async function showClippingDetail(clippingId = null) {
     // 키워드 렌더링
     renderKeywords();
     
+    // Slack 웹훅 URL 입력 감지 (실시간 배경색 변경 + 유효성 검증)
+    const webhookInput = document.getElementById('slack-webhook-url');
+    const messageSpan = document.getElementById('webhook-validation-message');
+    if (webhookInput) {
+        // 초기 상태: 검증 메시지 숨김
+        if (messageSpan) {
+            messageSpan.textContent = '';
+            messageSpan.className = 'webhook-message';
+        }
+        
+        // 초기 배경색 체크
+        checkWebhookUrl();
+        
+        // 입력 이벤트 리스너 (배경색 변경)
+        webhookInput.addEventListener('input', checkWebhookUrl);
+        
+        // 포커스 벗어날 때 유효성 검증
+        webhookInput.addEventListener('blur', validateSlackWebhook);
+    }
+    
     // 모달 표시
     if (clippingDetailModalOverlay) {
         clippingDetailModalOverlay.classList.add('visible');
@@ -1153,6 +1179,90 @@ async function showClippingDetail(clippingId = null) {
     addLog('[함수종료] showClippingDetail() - 성공', 'debug');
     addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
     addLog('ℹ️ 클리핑 상세 모달 열림', 'info');
+}
+
+/**
+ * Slack 웹훅 URL 입력 체크 (배경색 변경)
+ */
+function checkWebhookUrl() {
+    const webhookInput = document.getElementById('slack-webhook-url');
+    const messageSpan = document.getElementById('webhook-validation-message');
+    if (!webhookInput) return;
+    
+    if (webhookInput.value.trim() === '') {
+        webhookInput.classList.add('required-empty');
+        webhookInput.classList.remove('webhook-valid');
+        webhookInput.classList.remove('webhook-invalid');
+        
+        // 입력값이 없으면 검증 메시지도 숨김
+        if (messageSpan) {
+            messageSpan.textContent = '';
+            messageSpan.className = 'webhook-message';
+        }
+    } else {
+        webhookInput.classList.remove('required-empty');
+    }
+}
+
+/**
+ * Slack 웹훅 URL 유효성 검증 (실시간)
+ */
+async function validateSlackWebhook() {
+    const webhookInput = document.getElementById('slack-webhook-url');
+    const messageSpan = document.getElementById('webhook-validation-message');
+    if (!webhookInput || !messageSpan) return;
+    
+    const url = webhookInput.value.trim();
+    
+    // 비어있으면 검증 안 함
+    if (!url) {
+        webhookInput.classList.remove('webhook-valid');
+        webhookInput.classList.remove('webhook-invalid');
+        messageSpan.textContent = '';
+        messageSpan.className = 'webhook-message';
+        return;
+    }
+    
+    // 로딩 상태 표시
+    webhookInput.style.opacity = '0.6';
+    messageSpan.textContent = '확인 중...';
+    messageSpan.className = 'webhook-message';
+    
+    try {
+        const response = await fetch('/api/test-slack-webhook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ webhook_url: url })
+        });
+        
+        const result = await response.json();
+        
+        if (result.valid) {
+            // 유효함 - 초록색 테두리 + 문구
+            webhookInput.classList.add('webhook-valid');
+            webhookInput.classList.remove('webhook-invalid');
+            webhookInput.classList.remove('required-empty');
+            messageSpan.textContent = '✅ 주소확인완료';
+            messageSpan.className = 'webhook-message valid';
+            console.log('[Slack 검증] 성공:', result.message);
+        } else {
+            // 유효하지 않음 - 빨간색 테두리 + 문구
+            webhookInput.classList.add('webhook-invalid');
+            webhookInput.classList.remove('webhook-valid');
+            messageSpan.textContent = '⚠️ 주소확인필요';
+            messageSpan.className = 'webhook-message invalid';
+            console.log('[Slack 검증] 실패:', result.error);
+        }
+    } catch (error) {
+        console.error('[Slack 검증] 오류:', error);
+        webhookInput.classList.add('webhook-invalid');
+        webhookInput.classList.remove('webhook-valid');
+        messageSpan.textContent = '⚠️ 주소확인필요';
+        messageSpan.className = 'webhook-message invalid';
+    } finally {
+        // 로딩 상태 해제
+        webhookInput.style.opacity = '1';
+    }
 }
 
 /**
@@ -1592,7 +1702,7 @@ async function saveSelectedArticles() {
         addLog('├─ [조건분기] selectedNews.length = 0 → 경고 후 종료', 'branch');
         addLog('[함수종료] saveSelectedArticles() - 선택 없음', 'debug');
         addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
-        alert('선택된 기사가 없습니다');
+        showToast('⚠️ 선택된 기사가 없습니다', 'error');
         return;
     }
     
@@ -1626,19 +1736,19 @@ async function saveSelectedArticles() {
             addLog('[함수종료] saveSelectedArticles() - 성공', 'debug');
             addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
             
-            // 저장 후 저장목록 패널 자동 열기
-            showSavedListPanel();
+            // 저장완료 토스트 표시
+            showToast('✅ 저장완료', 'success');
         } else {
             addLog(`├─ [에러] ${result.error}`, 'error');
             addLog('[함수종료] saveSelectedArticles() - 실패', 'debug');
             addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
-            alert(`저장 실패: ${result.error}`);
+            showToast(`❌ 저장 실패: ${result.error}`, 'error');
         }
     } catch (error) {
         addLog(`├─ [예외발생] ${error.name}: ${error.message}`, 'error');
         addLog('[함수종료] saveSelectedArticles() - 예외', 'debug');
         addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
-        alert(`저장 중 오류 발생: ${error.message}`);
+        showToast(`❌ 저장 중 오류 발생`, 'error');
     }
 }
 
@@ -1939,7 +2049,7 @@ function applyFiltersAndSort() {
     if (dateValue !== 'all') {
         const now = new Date();
         filteredGoogle = filteredGoogle.filter(news => {
-            const newsDate = new Date(news.created_at);
+            const newsDate = new Date(news.published_date || news.created_at);
             const diffDays = Math.floor((now - newsDate) / (1000 * 60 * 60 * 24));
             
             if (dateValue === 'today') return diffDays === 0;
@@ -2306,3 +2416,288 @@ window.editClipping = editClipping;
 window.toggleSelection = toggleSelection;
 window.removeFromSelection = removeFromSelection;
 window.showToast = showToast;
+
+// ============================================================
+// 검색기록 관리 시스템
+// ============================================================
+
+// 검색기록 데이터 구조: { keyword: string, pinned: boolean, timestamp: number }
+let searchHistory = [];
+const SEARCH_HISTORY_KEY = 'news_search_history';
+const MAX_HISTORY = 20;
+
+/**
+ * 검색기록 로드 (localStorage)
+ */
+function loadSearchHistory() {
+    try {
+        const saved = localStorage.getItem(SEARCH_HISTORY_KEY);
+        if (saved) {
+            searchHistory = JSON.parse(saved);
+        }
+    } catch (error) {
+        console.error('[검색기록] 로드 실패:', error);
+        searchHistory = [];
+    }
+}
+
+/**
+ * 검색기록 저장 (localStorage)
+ */
+function saveSearchHistory() {
+    try {
+        localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory));
+    } catch (error) {
+        console.error('[검색기록] 저장 실패:', error);
+    }
+}
+
+/**
+ * 검색기록 추가
+ */
+function addSearchHistory(keyword) {
+    if (!keyword || keyword.trim() === '') return;
+    
+    keyword = keyword.trim();
+    
+    // 중복 제거 (기존 항목 삭제)
+    searchHistory = searchHistory.filter(item => item.keyword !== keyword);
+    
+    // 새 항목 추가 (맨 앞에)
+    searchHistory.unshift({
+        keyword: keyword,
+        pinned: false,
+        timestamp: Date.now()
+    });
+    
+    // 최대 개수 제한 (고정된 항목 제외)
+    const pinnedItems = searchHistory.filter(item => item.pinned);
+    const unpinnedItems = searchHistory.filter(item => !item.pinned);
+    
+    if (unpinnedItems.length > MAX_HISTORY) {
+        searchHistory = [...pinnedItems, ...unpinnedItems.slice(0, MAX_HISTORY)];
+    }
+    
+    saveSearchHistory();
+    renderSearchHistory();
+}
+
+/**
+ * 검색기록 렌더링
+ */
+function renderSearchHistory() {
+    const historyList = document.getElementById('history-list');
+    const historyEmpty = document.getElementById('history-empty');
+    
+    if (!historyList || !historyEmpty) return;
+    
+    // 고정된 항목을 맨 위로, 나머지는 최신순
+    const pinnedItems = searchHistory.filter(item => item.pinned);
+    const unpinnedItems = searchHistory.filter(item => !item.pinned);
+    const sortedHistory = [...pinnedItems, ...unpinnedItems];
+    
+    if (sortedHistory.length === 0) {
+        historyList.innerHTML = '';
+        historyEmpty.style.display = 'block';
+        return;
+    }
+    
+    historyEmpty.style.display = 'none';
+    historyList.innerHTML = '';
+    
+    sortedHistory.forEach((item, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'history-dropdown-item' + (item.pinned ? ' pinned' : '');
+        
+        // 고정 버튼
+        const pinBtn = document.createElement('button');
+        pinBtn.className = 'btn-pin-keyword' + (item.pinned ? ' pinned' : '');
+        pinBtn.innerHTML = item.pinned ? '📌' : '📍';
+        pinBtn.title = item.pinned ? '고정 해제' : '고정';
+        pinBtn.onclick = (e) => {
+            e.stopPropagation();
+            togglePinKeyword(item.keyword);
+        };
+        
+        // 검색어 텍스트
+        const textSpan = document.createElement('span');
+        textSpan.className = 'history-dropdown-item-text';
+        textSpan.textContent = item.keyword;
+        textSpan.onclick = () => {
+            selectHistoryKeyword(item.keyword);
+        };
+        
+        // 삭제 버튼
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'history-dropdown-item-remove';
+        removeBtn.innerHTML = '×';
+        removeBtn.title = '삭제';
+        removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            removeSearchHistory(item.keyword);
+        };
+        
+        itemDiv.appendChild(pinBtn);
+        itemDiv.appendChild(textSpan);
+        itemDiv.appendChild(removeBtn);
+        historyList.appendChild(itemDiv);
+    });
+}
+
+/**
+ * 검색기록 고정/해제 토글
+ */
+function togglePinKeyword(keyword) {
+    const item = searchHistory.find(item => item.keyword === keyword);
+    if (item) {
+        item.pinned = !item.pinned;
+        saveSearchHistory();
+        renderSearchHistory();
+    }
+}
+
+/**
+ * 검색기록 선택 (검색 실행)
+ */
+function selectHistoryKeyword(keyword) {
+    const keywordInput = document.getElementById('keyword-input-toolbar');
+    if (keywordInput) {
+        keywordInput.value = keyword;
+        hideHistoryDropdown();
+        // 검색 실행
+        if (typeof crawlBtnToolbar !== 'undefined' && crawlBtnToolbar) {
+            crawlBtnToolbar.click();
+        }
+    }
+}
+
+/**
+ * 검색기록 개별 삭제
+ */
+function removeSearchHistory(keyword) {
+    searchHistory = searchHistory.filter(item => item.keyword !== keyword);
+    saveSearchHistory();
+    renderSearchHistory();
+}
+
+/**
+ * 검색기록 전체 삭제 (고정된 항목 제외)
+ */
+function clearAllSearchHistory() {
+    const pinnedItems = searchHistory.filter(item => item.pinned);
+    
+    if (pinnedItems.length === searchHistory.length) {
+        showToast('⚠️ 고정된 검색어만 남아있습니다', 'error');
+        return;
+    }
+    
+    // 확인 없이 바로 삭제
+    searchHistory = pinnedItems;
+    saveSearchHistory();
+    renderSearchHistory();
+    
+    // 삭제완료 토스트
+    showToast('✅ 삭제완료', 'success');
+}
+
+/**
+ * 검색기록 드롭다운 표시
+ */
+function showHistoryDropdown() {
+    const dropdown = document.getElementById('history-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'block';
+        renderSearchHistory();
+    }
+}
+
+/**
+ * 검색기록 드롭다운 숨김
+ */
+function hideHistoryDropdown() {
+    const dropdown = document.getElementById('history-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+}
+
+/**
+ * 검색기록 드롭다운 토글
+ */
+function toggleHistoryDropdown() {
+    const dropdown = document.getElementById('history-dropdown');
+    if (dropdown) {
+        if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+            showHistoryDropdown();
+        } else {
+            hideHistoryDropdown();
+        }
+    }
+}
+
+// ========== 이벤트 리스너 등록 ==========
+document.addEventListener('DOMContentLoaded', function() {
+    // 검색기록 로드
+    loadSearchHistory();
+    
+    // 드롭다운 토글 버튼
+    const historyToggleBtn = document.getElementById('history-toggle-btn');
+    if (historyToggleBtn) {
+        historyToggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleHistoryDropdown();
+        });
+    }
+    
+    // 전체 삭제 버튼
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            clearAllSearchHistory();
+        });
+    }
+    
+    // 검색창 포커스 시 드롭다운 표시
+    const keywordInput = document.getElementById('keyword-input-toolbar');
+    if (keywordInput) {
+        keywordInput.addEventListener('focus', function() {
+            showHistoryDropdown();
+        });
+        
+        // Enter 키로 검색 시 기록 추가
+        keywordInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const keyword = keywordInput.value.trim();
+                if (keyword) {
+                    addSearchHistory(keyword);
+                }
+            }
+        });
+    }
+    
+    // 검색 버튼 클릭 시 기록 추가
+    const crawlBtn = document.getElementById('crawl-btn-toolbar');
+    if (crawlBtn) {
+        crawlBtn.addEventListener('click', function() {
+            const keyword = keywordInput ? keywordInput.value.trim() : '';
+            if (keyword) {
+                addSearchHistory(keyword);
+            }
+        });
+    }
+    
+    // 외부 클릭 시 드롭다운 숨김
+    document.addEventListener('click', function(e) {
+        const dropdown = document.getElementById('history-dropdown');
+        const historyToggleBtn = document.getElementById('history-toggle-btn');
+        const keywordInput = document.getElementById('keyword-input-toolbar');
+        
+        if (dropdown && 
+            !dropdown.contains(e.target) && 
+            e.target !== historyToggleBtn && 
+            e.target !== keywordInput) {
+            hideHistoryDropdown();
+        }
+    });
+});

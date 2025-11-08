@@ -7,7 +7,7 @@ Naver News: Selenium 크롤링
 """
 
 # 앱 버전
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
@@ -305,6 +305,58 @@ def index():
 def clipping():
     """클리핑 페이지"""
     return render_template('clipping.html')
+
+@app.route('/api/test-slack-webhook', methods=['POST'])
+def test_slack_webhook():
+    """Slack 웹훅 URL 유효성 테스트 (메시지 전송 없이 연결만 확인)"""
+    try:
+        data = request.json
+        webhook_url = data.get('webhook_url', '')
+        
+        if not webhook_url:
+            return jsonify({'valid': False, 'error': 'URL이 비어있습니다'}), 400
+        
+        # Slack 웹훅 URL 형식 검증
+        import re
+        slack_pattern = r'^https://hooks\.slack\.com/services/[A-Z0-9]+/[A-Z0-9]+/[A-Za-z0-9]+$'
+        
+        if not re.match(slack_pattern, webhook_url):
+            return jsonify({'valid': False, 'error': 'Slack 웹훅 URL 형식이 올바르지 않습니다'})
+        
+        # HEAD 요청으로 연결만 확인 (메시지 전송 없음)
+        try:
+            response = requests.head(webhook_url, timeout=5, allow_redirects=True)
+            
+            # 디버깅: 응답 정보 출력
+            print(f"[Slack 검증 디버그] ━━━━━━━━━━━━━━━━━━━━━━")
+            print(f"[Slack 검증 디버그] URL: {webhook_url}")
+            print(f"[Slack 검증 디버그] 응답 코드: {response.status_code}")
+            print(f"[Slack 검증 디버그] 응답 헤더: {dict(response.headers)}")
+            print(f"[Slack 검증 디버그] 리다이렉트 여부: {response.is_redirect}")
+            print(f"[Slack 검증 디버그] 최종 URL: {response.url}")
+            print(f"[Slack 검증 디버그] ━━━━━━━━━━━━━━━━━━━━━━")
+            
+            # Slack은 HEAD 요청에 대해 다양한 응답 코드를 반환
+            # 400: Bad Request (올바른 URL이지만 HEAD 요청 거부) → 정상으로 판단
+            # 405: Method Not Allowed (올바른 URL이지만 HEAD 요청 미지원) → 정상으로 판단
+            # 200: OK → 정상
+            # 404: Not Found → 잘못된 URL
+            if response.status_code in [200, 400, 405]:
+                return jsonify({'valid': True, 'message': '웹훅 URL이 정상적으로 작동합니다'})
+            elif response.status_code == 404:
+                return jsonify({'valid': False, 'error': 'URL을 찾을 수 없습니다 (404)'})
+            else:
+                return jsonify({'valid': False, 'error': f'Slack 응답 오류 (코드: {response.status_code})'})
+        except requests.exceptions.ConnectionError as e:
+            print(f"[Slack 검증 디버그] ConnectionError: {str(e)}")
+            return jsonify({'valid': False, 'error': '연결 실패: URL이 올바르지 않습니다'})
+    
+    except requests.exceptions.Timeout:
+        return jsonify({'valid': False, 'error': '연결 시간 초과'})
+    except requests.exceptions.RequestException as e:
+        return jsonify({'valid': False, 'error': f'연결 실패: {str(e)}'})
+    except Exception as e:
+        return jsonify({'valid': False, 'error': str(e)})
 
 @app.route('/clipping-detail')
 def clipping_detail():

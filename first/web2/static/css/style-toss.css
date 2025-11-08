@@ -115,6 +115,43 @@ body.panel-open .container {
     display: none;
 }
 
+/* Slack 웹훅 URL 필수 입력 강조 */
+#slack-webhook-url.required-empty {
+    background-color: #FFF0F0;
+    border-color: #F04452;
+}
+
+/* Slack 웹훅 URL 유효성 검증 */
+#slack-webhook-url.webhook-valid {
+    border-color: #4CAF50;
+    background-color: #F1F8F4;
+}
+
+#slack-webhook-url.webhook-invalid {
+    border-color: #F04452;
+    background-color: #FFF0F0;
+}
+
+/* 웹훅 검증 메시지 (입력창 오른쪽) */
+.webhook-message {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+}
+
+.webhook-message.valid {
+    color: #4CAF50; /* 초록색 */
+}
+
+.webhook-message.invalid {
+    color: #F04452; /* 빨간색 */
+}
+
+.webhook-message:empty {
+    display: none;
+}
+
 /* 버전 표시 */
 .version-display {
     position: fixed;
@@ -378,18 +415,20 @@ body.panel-open .container {
     color: var(--primary-blue);
 }
 
-/* 검색기록 드롭다운 - 우측 정렬 */
+/* 검색기록 드롭다운 - 검색창 오른쪽 끝에 맞춤 */
 .history-dropdown {
     position: absolute;
     top: calc(100% + 8px);
-    right: 0;
-    width: 440px;
+    left: 0;
+    right: auto;
+    width: 100%;
+    max-width: 480px;
     max-height: 400px;
     background: var(--background-white);
     border: 1px solid var(--border-light);
     border-radius: 12px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    z-index: 100;
+    z-index: 1000; /* 높은 z-index로 다른 요소 위에 표시 */
     overflow: hidden;
 }
 
@@ -431,9 +470,14 @@ body.panel-open .container {
     padding: 12px 16px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     cursor: pointer;
     transition: all 0.2s;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.history-dropdown-item:last-child {
+    border-bottom: none;
 }
 
 .history-dropdown-item:hover {
@@ -441,20 +485,21 @@ body.panel-open .container {
 }
 
 .history-dropdown-item.pinned {
-    background: var(--secondary-blue);
+    background: #F0F7FF;
+    border-left: 3px solid var(--primary-blue);
 }
 
 .btn-pin-keyword {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
     background: transparent;
-    border: 1px solid var(--border-normal);
+    border: 1.5px solid var(--border-normal);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 14px;
     transition: all 0.2s;
     flex-shrink: 0;
 }
@@ -462,6 +507,7 @@ body.panel-open .container {
 .btn-pin-keyword:hover {
     background: var(--background-light);
     border-color: var(--primary-blue);
+    transform: scale(1.1);
 }
 
 .btn-pin-keyword.pinned {
@@ -474,20 +520,29 @@ body.panel-open .container {
     flex: 1;
     font-size: 14px;
     color: var(--text-primary);
+    font-weight: 500;
+}
+
+.history-dropdown-item.pinned .history-dropdown-item-text {
+    color: var(--primary-blue);
+    font-weight: 600;
 }
 
 .history-dropdown-item-remove {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: transparent;
     color: var(--text-tertiary);
     border: none;
-    font-size: 16px;
+    font-size: 18px;
     cursor: pointer;
     opacity: 0;
     transition: all 0.2s;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .history-dropdown-item:hover .history-dropdown-item-remove {
@@ -497,6 +552,7 @@ body.panel-open .container {
 .history-dropdown-item-remove:hover {
     background: #FFEBEE;
     color: #FF4757;
+    transform: scale(1.1);
 }
 
 .history-dropdown-empty {
@@ -1866,16 +1922,80 @@ select:focus {
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: #FF4757;
-    color: white;
+    background: transparent;
+    color: var(--text-tertiary);
     border: none;
-    font-size: 14px;
+    font-size: 18px;
     cursor: pointer;
+    opacity: 0;
     transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.selection-item:hover .selection-item-remove {
+    opacity: 1;
 }
 
 .selection-item-remove:hover {
-    background: #EE3344;
+    background: #FFEBEE;
+    color: #FF4757;
+    transform: scale(1.1);
+}
+
+/* 선택한 기사 테이블의 삭제 버튼 (검색기록 스타일) */
+.btn-remove {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-tertiary);
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+tr:hover .btn-remove,
+.selected-news-row:hover .btn-remove {
+    opacity: 1;
+}
+
+.btn-remove:hover {
+    background: #FFEBEE;
+    color: #FF4757;
+    transform: scale(1.1);
+}
+
+/* 선택한 기사 테이블의 td 안에 있는 button (클래스명 없는 버튼) */
+#selection-table-body td > button {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-tertiary);
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#selection-table-body tr:hover td > button {
+    opacity: 1;
+}
+
+#selection-table-body td > button:hover {
+    background: #FFEBEE;
+    color: #FF4757;
     transform: scale(1.1);
 }
 
@@ -2146,106 +2266,7 @@ select:focus {
     color: var(--primary-blue);
 }
 
-/* ========== 드롭다운 (검색기록) ========== */
-.history-dropdown-wrapper {
-    position: relative;
-}
-
-.history-dropdown {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 8px;
-    width: 280px;
-    max-height: 400px;
-    background: var(--background-white);
-    border: 1px solid var(--border-light);
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    z-index: 100;
-    overflow: hidden;
-}
-
-.history-dropdown-header {
-    padding: 16px;
-    border-bottom: 1px solid var(--border-light);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.history-dropdown-header span {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.btn-clear-history {
-    font-size: 12px;
-    font-weight: 600;
-    color: #FF4757;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 4px;
-}
-
-.btn-clear-history:hover {
-    background: #FFEBEE;
-}
-
-.history-dropdown-list {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.history-dropdown-item {
-    padding: 12px 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.history-dropdown-item:hover {
-    background: var(--background-light);
-}
-
-.history-dropdown-item-text {
-    font-size: 14px;
-    color: var(--text-primary);
-}
-
-.history-dropdown-item-remove {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-tertiary);
-    border: none;
-    font-size: 16px;
-    cursor: pointer;
-    opacity: 0;
-    transition: all 0.2s;
-}
-
-.history-dropdown-item:hover .history-dropdown-item-remove {
-    opacity: 1;
-}
-
-.history-dropdown-item-remove:hover {
-    background: #FFEBEE;
-    color: #FF4757;
-}
-
-.history-dropdown-empty {
-    padding: 40px 20px;
-    text-align: center;
-    color: var(--text-tertiary);
-    font-size: 14px;
-}
+/* ========== 드롭다운 (검색기록) - 중복 제거됨 ========== */
 
 /* ========== 로그 플로팅 패널 ========== */
 .log-floating-panel {
@@ -2772,6 +2793,7 @@ select:focus {
     left: 22px;
 }
 
+.btn-send-clipping,
 .btn-open-clipping,
 .btn-delete-clipping {
     padding: 8px 12px;
@@ -2781,6 +2803,15 @@ select:focus {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
+}
+
+.btn-send-clipping {
+    background: var(--primary-blue);
+    color: white;
+}
+
+.btn-send-clipping:hover {
+    background: #1f5fde;
 }
 
 .btn-open-clipping {
