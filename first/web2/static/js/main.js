@@ -310,24 +310,12 @@ async function crawlNews() {
             allNewsData = result.google_news || [];
             addLog(`├─ [변수할당] allNewsData = [${allNewsData.length}개 배열]`, 'data');
             
+            allNaverNewsData = result.naver_news || [];
+            addLog(`├─ [변수할당] allNaverNewsData = [${allNaverNewsData.length}개 배열]`, 'data');
+            
             // 구글 뉴스 렌더링
             addLog('├─ [함수호출] renderNewsTable(allNewsData)', 'debug');
             renderNewsTable(allNewsData);
-            
-            // 네이버 뉴스 크롤링 시작
-            addLog('├─ [API호출] POST /api/crawl/naver 시작', 'api');
-            fetch('/api/crawl/naver', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ keyword: keyword })
-            })
-            .then(res => res.json())
-            .then(naverResult => {
-                addLog('│  ├─ [API응답] 네이버 크롤링 완료', 'api');
-                addLog(`│  └─ [응답데이터] news.length = ${naverResult.news?.length || 0}`, 'api');
-                
-                allNaverNewsData = naverResult.news || [];
-                addLog(`├─ [변수할당] allNaverNewsData = [${allNaverNewsData.length}개 배열]`, 'data');
                 
                 // 네이버 뉴스 렌더링
                 addLog('├─ [함수호출] renderNaverNewsTable(allNaverNewsData)', 'debug');
@@ -336,11 +324,6 @@ async function crawlNews() {
                 addLog('[함수종료] crawlNews() - 성공', 'debug');
                 addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
                 addLog(`✅ 검색 완료: 구글 ${allNewsData.length}개, 네이버 ${allNaverNewsData.length}개`, 'success');
-            })
-            .catch(error => {
-                addLog(`├─ [예외발생] 네이버 크롤링 오류: ${error.message}`, 'error');
-                renderNaverNewsTable([]);
-            });
         } else {
             addLog('├─ [조건분기] result.success = false → 검색 실패', 'branch');
             addLog('[함수종료] crawlNews() - 실패', 'debug');
@@ -1817,10 +1800,15 @@ function applyFiltersAndSort() {
         addLog(`├─ [필터] 날짜 필터 적용 후: ${filteredGoogle.length}개`, 'debug');
     }
     
-    // 정렬
+    // 정렬 (published_date 기준, 없으면 created_at 사용)
     filteredGoogle.sort((a, b) => {
-        const dateA = new Date(a.created_at);
-        const dateB = new Date(b.created_at);
+        const dateA = new Date(a.published_date || a.created_at);
+        const dateB = new Date(b.published_date || b.created_at);
+        
+        // 유효하지 않은 날짜는 맨 뒤로
+        if (isNaN(dateA.getTime())) return 1;
+        if (isNaN(dateB.getTime())) return -1;
+        
         return sortValue === 'desc' ? dateB - dateA : dateA - dateB;
     });
     addLog(`├─ [정렬] ${sortValue === 'desc' ? '최신순' : '오래된순'} 정렬 완료`, 'debug');
@@ -1838,7 +1826,9 @@ function applyFiltersAndSort() {
     if (dateValue !== 'all') {
         const now = new Date();
         filteredNaver = filteredNaver.filter(news => {
-            const newsDate = new Date(news.created_at);
+            const newsDate = new Date(news.published_date || news.created_at);
+            if (isNaN(newsDate.getTime())) return true;
+            
             const diffDays = Math.floor((now - newsDate) / (1000 * 60 * 60 * 24));
             
             if (dateValue === 'today') return diffDays === 0;
@@ -1849,8 +1839,13 @@ function applyFiltersAndSort() {
     }
     
     filteredNaver.sort((a, b) => {
-        const dateA = new Date(a.created_at);
-        const dateB = new Date(b.created_at);
+        const dateA = new Date(a.published_date || a.created_at);
+        const dateB = new Date(b.published_date || b.created_at);
+        
+        // 유효하지 않은 날짜는 맨 뒤로
+        if (isNaN(dateA.getTime())) return 1;
+        if (isNaN(dateB.getTime())) return -1;
+        
         return sortValue === 'desc' ? dateB - dateA : dateA - dateB;
     });
     

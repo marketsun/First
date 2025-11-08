@@ -11,7 +11,7 @@ from flask_cors import CORS
 import sqlite3
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import re
 import sys
@@ -30,6 +30,64 @@ static_folder = os.path.join(application_path, 'static')
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 CORS(app)
 
+# 시간 파싱 함수
+def parse_published_time(time_str):
+    """
+    published_time 문자열을 실제 datetime 객체로 변환
+    예: "1시간 전" -> datetime 객체
+    """
+    if not time_str or time_str == '시간 정보 없음':
+        return None
+    
+    now = datetime.now()
+    time_str = time_str.strip()
+    
+    try:
+        # "N분 전"
+        if '분 전' in time_str or '분전' in time_str:
+            minutes = int(re.search(r'(\d+)', time_str).group(1))
+            return now - timedelta(minutes=minutes)
+        
+        # "N시간 전"
+        elif '시간 전' in time_str or '시간전' in time_str:
+            hours = int(re.search(r'(\d+)', time_str).group(1))
+            return now - timedelta(hours=hours)
+        
+        # "N일 전"
+        elif '일 전' in time_str or '일전' in time_str:
+            days = int(re.search(r'(\d+)', time_str).group(1))
+            return now - timedelta(days=days)
+        
+        # "N주 전"
+        elif '주 전' in time_str or '주전' in time_str:
+            weeks = int(re.search(r'(\d+)', time_str).group(1))
+            return now - timedelta(weeks=weeks)
+        
+        # "N개월 전"
+        elif '개월 전' in time_str or '개월전' in time_str:
+            months = int(re.search(r'(\d+)', time_str).group(1))
+            return now - timedelta(days=months * 30)
+        
+        # "N년 전"
+        elif '년 전' in time_str or '년전' in time_str:
+            years = int(re.search(r'(\d+)', time_str).group(1))
+            return now - timedelta(days=years * 365)
+        
+        # "YYYY. M. D." 형식
+        elif re.match(r'\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?', time_str):
+            # "2025. 7. 2." -> "2025-07-02"
+            date_match = re.search(r'(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?', time_str)
+            if date_match:
+                year, month, day = date_match.groups()
+                return datetime(int(year), int(month), int(day))
+        
+        # 파싱 실패 시 현재 시간 반환
+        return now
+    
+    except Exception as e:
+        print(f"[파싱 오류] {time_str}: {str(e)}")
+        return now
+
 # 데이터베이스 초기화
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -43,10 +101,18 @@ def init_db():
             link TEXT UNIQUE NOT NULL,
             source TEXT,
             published_time TEXT,
+            published_date TIMESTAMP,
             keyword TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # published_date 컬럼이 없는 경우 추가 (기존 DB 호환)
+    try:
+        c.execute('ALTER TABLE news ADD COLUMN published_date TIMESTAMP')
+        print("[DB] published_date 컬럼 추가됨")
+    except sqlite3.OperationalError:
+        pass  # 이미 존재하는 경우
     
     # 저장 목록 테이블
     c.execute('''
@@ -126,93 +192,118 @@ def crawl_news():
         naver_news = []
         
         # ================================================================
-        # 1. Google News (RSS 파싱)
+        # 1. Google Search (requests + BeautifulSoup)
         # ================================================================
         try:
-            log(f"\n[Google] RSS 파싱 시작...")
+            log(f"\n[Google] HTTP 요청 시작...")
             
             encoded_keyword = quote(keyword)
-            rss_url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl=ko&gl=KR&ceid=KR:ko"
             
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
-            response = requests.get(rss_url, headers=headers, timeout=10)
-            response.raise_for_status()
-            
-            log(f"[Google] RSS 응답: 200 OK ({len(response.content)} bytes)")
-            
-            root = ET.fromstring(response.content)
-            items = root.findall('.//item')
-            
-            log(f"[Google] 발견: {len(items)}개 항목")
             
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             
             saved_count = 0
-            filtered_count = 0
             
-            for item in items:
+            # 10페이지까지 크롤링
+            for page in range(0, 10):
                 try:
-                    # 제목
-                    title_elem = item.find('title')
-                    if title_elem is None or title_elem.text is None:
-                        continue
+                    # start 파라미터: 0, 10, 20, 30, ...
+                    start = page * 10
+                    google_url = f"https://www.google.com/search?q={encoded_keyword}&tbm=nws&hl=ko&gl=KR&start={start}"
                     
-                    title = title_elem.text.strip()
-                    if not title or len(title) < 5:
-                        continue
+                    log(f"[Google] {page + 1}페이지 요청: start={start}")
+                    response = requests.get(google_url, headers=headers, timeout=10)
+                    response.raise_for_status()
                     
-                    # 키워드 필터
-                    if keyword.lower() not in title.lower():
-                        filtered_count += 1
-                        continue
+                    log(f"[Google] {page + 1}페이지 응답: 200 OK ({len(response.content)} bytes)")
                     
-                    # 링크
-                    link_elem = item.find('link')
-                    if link_elem is None or link_elem.text is None:
-                        continue
-                    link = link_elem.text.strip()
-                    if not link:
-                        continue
+                    # BeautifulSoup 파싱
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    articles = soup.find_all('div', class_='SoaBEf')
                     
-                    # 출처
-                    source = '구글뉴스'
-                    description_elem = item.find('description')
-                    if description_elem is not None and description_elem.text:
-                        desc = description_elem.text
-                        font_match = re.search(r'<font[^>]*>([^<]+)</font>', desc)
-                        if font_match:
-                            source = font_match.group(1).strip()
+                    log(f"[Google] {page + 1}페이지 발견: {len(articles)}개 항목")
                     
-                    # 시간
-                    published_time = '시간 정보 없음'
-                    if description_elem is not None and description_elem.text:
-                        desc = description_elem.text
-                        time_match = re.search(r'(\d+\s*(?:초|분|시간|일|주|개월|년)\s*전)', desc)
-                        if time_match:
-                            published_time = time_match.group(1)
+                    if len(articles) == 0:
+                        log(f"[Google] {page + 1}페이지에 기사 없음, 중단")
+                        break
                     
-                    # 저장
-                    c.execute('''
-                        INSERT INTO news (title, link, source, published_time, keyword)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (title, link, source, published_time, keyword))
-                    saved_count += 1
+                    page_saved = 0
+                    for article in articles:
+                        try:
+                            # 제목 찾기 (div[role="heading"])
+                            title_elem = article.find('div', {'role': 'heading'})
+                            if not title_elem:
+                                continue
+                            
+                            title = title_elem.get_text(strip=True)
+                            if not title or len(title) < 5:
+                                continue
+                            
+                            # 키워드 필터
+                            if keyword.lower() not in title.lower():
+                                continue
+                            
+                            # 링크 찾기 (a href)
+                            link_elem = article.find('a', href=True)
+                            if not link_elem:
+                                continue
+                            
+                            link = link_elem.get('href', '')
+                            if not link or not link.startswith('http'):
+                                continue
+                            
+                            # 출처 찾기 (span 첫 번째)
+                            source = '구글뉴스'
+                            spans = article.find_all('span')
+                            if spans and len(spans) > 0:
+                                source_text = spans[0].get_text(strip=True)
+                                if source_text:
+                                    source = source_text
+                            
+                            # 시간 찾기 (span 세 번째, 마지막)
+                            published_time = '시간 정보 없음'
+                            if spans and len(spans) >= 3:
+                                time_text = spans[-1].get_text(strip=True)
+                                if time_text:
+                                    published_time = time_text
+                            
+                            # 시간 파싱
+                            published_date = parse_published_time(published_time)
+                            
+                            # 저장
+                            c.execute('''
+                                INSERT INTO news (title, link, source, published_time, published_date, keyword)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            ''', (title, link, source, published_time, published_date, keyword))
+                            saved_count += 1
+                            page_saved += 1
+                            
+                            if saved_count <= 3:
+                                log(f"[Google] ✓ {saved_count}: {title[:40]}...")
+                            
+                        except sqlite3.IntegrityError:
+                            pass
+                        except Exception as e:
+                            continue
                     
-                    if saved_count <= 3:
-                        log(f"[Google] ✓ {saved_count}: {title[:40]}...")
+                    log(f"[Google] {page + 1}페이지에서 {page_saved}개 저장")
                     
-                except sqlite3.IntegrityError:
-                    pass
+                    # 페이지 간 딜레이 (봇 감지 방지)
+                    import time
+                    time.sleep(1)
+                    
                 except Exception as e:
+                    log(f"[Google] {page + 1}페이지 오류: {str(e)[:50]}")
                     continue
             
             conn.commit()
             conn.close()
             
-            log(f"[Google] 완료: {saved_count}개 저장, {filtered_count}개 필터")
+            log(f"[Google] 완료: 총 {saved_count}개 저장")
             
         except Exception as e:
             log(f"[Google] 오류: {str(e)}")
@@ -232,10 +323,12 @@ def crawl_news():
             from selenium.webdriver.common.by import By
             
             chrome_options = Options()
+            chrome_options.add_argument('--headless')  # 브라우저 창 숨김
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
             chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
             
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -246,7 +339,7 @@ def crawl_news():
             try:
                 saved_count = 0
                 
-                for page in range(1, 4):
+                for page in range(1, 6):  # 1, 2, 3, 4, 5 페이지
                     retry_count = 0
                     max_retries = 2
                     success = False
@@ -286,17 +379,22 @@ def crawl_news():
                                     if not link or not link.startswith('http'):
                                         continue
                                     
-                                    # 출처
+                                    # 출처 (Naver는 항상 "네이버뉴스"로 통일)
                                     source = '네이버뉴스'
                                     parent = news_item
+                                    source_found = False
                                     for _ in range(10):
                                         parent = parent.parent
                                         if parent is None:
                                             break
                                         source_span = parent.select_one('span.sds-comps-profile-info-title-text')
                                         if source_span:
-                                            source = source_span.get_text(strip=True)
+                                            source_text = source_span.get_text(strip=True)
+                                            if source_text:
+                                                source = f"네이버뉴스 ({source_text})"
+                                                source_found = True
                                             break
+                                    # source_found가 False면 기본값 '네이버뉴스' 유지
                                     
                                     # 시간
                                     published_time = '시간 정보 없음'
@@ -310,11 +408,14 @@ def crawl_news():
                                             published_time = time_elem.get_text(strip=True)
                                             break
                                     
+                                    # 시간 파싱
+                                    published_date = parse_published_time(published_time)
+                                    
                                     # 저장
                                     c.execute('''
-                                        INSERT INTO news (title, link, source, published_time, keyword)
-                                        VALUES (?, ?, ?, ?, ?)
-                                    ''', (title, link, source, published_time, keyword))
+                                        INSERT INTO news (title, link, source, published_time, published_date, keyword)
+                                        VALUES (?, ?, ?, ?, ?, ?)
+                                    ''', (title, link, source, published_time, published_date, keyword))
                                     saved_count += 1
                                     
                                     if saved_count <= 3:
@@ -342,10 +443,14 @@ def crawl_news():
         except Exception as e:
             log(f"[Naver] 크롤링 오류: {str(e)}")
         
-        # 뉴스 반환
+        # 뉴스 반환 (published_date 기준 최신순 정렬)
         conn_read = sqlite3.connect(DB_PATH)
         c_read = conn_read.cursor()
-        c_read.execute('SELECT id, title, link, source, published_time FROM news ORDER BY created_at DESC')
+        c_read.execute('''
+            SELECT id, title, link, source, published_time, created_at, published_date 
+            FROM news 
+            ORDER BY published_date DESC, created_at DESC
+        ''')
         rows = c_read.fetchall()
         conn_read.close()
         
@@ -354,7 +459,15 @@ def crawl_news():
         naver_news = []
         
         for row in rows:
-            news_item = {'id': row[0], 'title': row[1], 'link': row[2], 'source': row[3], 'published_time': row[4]}
+            news_item = {
+                'id': row[0], 
+                'title': row[1], 
+                'link': row[2], 
+                'source': row[3], 
+                'published_time': row[4], 
+                'created_at': row[5],
+                'published_date': row[6]
+            }
             
             # source에 "네이버" 또는 "naver" 포함되면 naver_news에
             if '네이버' in row[3].lower() or 'naver' in row[3].lower():
