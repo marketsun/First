@@ -1823,39 +1823,188 @@ function renderSavedLists(lists) {
         return;
     }
     
-    container.innerHTML = lists.map(list => `
-        <div class="saved-list-item" data-list-id="${list.id}">
-            <div class="saved-list-item-info">
-                <div class="saved-list-item-name">${list.name}</div>
-                <div class="saved-list-item-meta">
-                    <span>${list.article_count}개 기사</span>
-                    <span>${new Date(list.created_at).toLocaleString('ko-KR')}</span>
+    container.innerHTML = '';
+    
+    lists.forEach(list => {
+        // 날짜 포맷팅: "검색어 2025-11-08 07:50"
+        const date = new Date(list.created_at);
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'saved-list-item';
+        itemDiv.dataset.listId = list.id;
+        
+        itemDiv.innerHTML = `
+            <div class="saved-list-header">
+                <button class="saved-list-copy" data-list-id="${list.id}" title="전체 복사">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M8 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-2" stroke="currentColor" stroke-width="2"/>
+                        <rect x="8" y="2" width="8" height="4" rx="1" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                </button>
+                <div class="saved-list-title" data-list-id="${list.id}">
+                    <span class="saved-list-name">${list.name.split('_')[0]}</span>
+                    <span class="saved-list-date">${dateStr}</span>
                 </div>
+                <button class="saved-list-delete" data-list-id="${list.id}">×</button>
             </div>
-            <div class="saved-list-item-actions">
-                <button class="btn-view-list" data-list-id="${list.id}">보기</button>
-                <button class="btn-delete-list" data-list-id="${list.id}">삭제</button>
+            <div class="saved-list-articles" style="display: none;">
+                <div class="saved-list-loading">기사 불러오는 중...</div>
             </div>
-        </div>
-    `).join('');
+        `;
+        
+        container.appendChild(itemDiv);
+        
+        // 폴더 제목 클릭 → 드롭다운 토글
+        const titleDiv = itemDiv.querySelector('.saved-list-title');
+        const articlesDiv = itemDiv.querySelector('.saved-list-articles');
+        let isOpen = false;
+        let articlesLoaded = false;
+        
+        titleDiv.onclick = async () => {
+            isOpen = !isOpen;
+            
+            if (isOpen) {
+                articlesDiv.style.display = 'block';
+                
+                // 기사 로드 (처음 열 때만)
+                if (!articlesLoaded) {
+                    await loadListArticles(list.id, articlesDiv);
+                    articlesLoaded = true;
+                }
+            } else {
+                articlesDiv.style.display = 'none';
+            }
+        };
+        
+        // 복사 버튼 이벤트
+        const copyBtn = itemDiv.querySelector('.saved-list-copy');
+        copyBtn.onclick = (e) => {
+            e.stopPropagation(); // 폴더 토글 방지
+            copyListArticles(list.id);
+        };
+        
+        // 삭제 버튼 이벤트
+        const deleteBtn = itemDiv.querySelector('.saved-list-delete');
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation(); // 폴더 토글 방지
+            deleteSavedList(list.id);
+        };
+    });
     
     addLog('├─ [DOM조작] 목록 HTML 렌더링 완료', 'dom');
-    
-    // 이벤트 바인딩
-    setTimeout(() => {
-        container.querySelectorAll('.btn-view-list').forEach(btn => {
-            const listId = btn.getAttribute('data-list-id');
-            btn.onclick = () => viewSavedList(listId);
+    addLog('[함수종료] renderSavedLists()', 'debug');
+}
+
+/**
+ * 저장 목록의 기사 로드
+ */
+async function loadListArticles(listId, articlesDiv) {
+    try {
+        const response = await fetch(`/api/saved-lists/${listId}`);
+        const result = await response.json();
+        
+        if (result.success && result.list) {
+            const articles = result.list.articles;
+            
+            if (articles.length === 0) {
+                articlesDiv.innerHTML = '<div class="saved-list-empty">저장된 기사가 없습니다</div>';
+                return;
+            }
+            
+            articlesDiv.innerHTML = articles.map((article, idx) => `
+                <div class="saved-article-item">
+                    <span class="saved-article-number">${idx + 1}.</span>
+                    <span class="saved-article-title" data-link="${article.link}">${article.title}</span>
+                    <button class="saved-article-delete" data-list-id="${listId}" data-article-id="${article.id}">×</button>
+                </div>
+            `).join('');
+            
+            // 기사 제목 클릭 → 링크 열기
+            articlesDiv.querySelectorAll('.saved-article-title').forEach(titleSpan => {
+                titleSpan.onclick = () => {
+                    const link = titleSpan.dataset.link;
+                    if (link) {
+                        window.open(link, '_blank');
+                    }
+                };
+                titleSpan.style.cursor = 'pointer';
+            });
+            
+            // 개별 기사 삭제 버튼 이벤트
+            articlesDiv.querySelectorAll('.saved-article-delete').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const articleId = btn.dataset.articleId;
+                    deleteArticleFromList(listId, articleId);
+                };
+            });
+        } else {
+            articlesDiv.innerHTML = '<div class="saved-list-error">기사를 불러올 수 없습니다</div>';
+        }
+    } catch (error) {
+        articlesDiv.innerHTML = '<div class="saved-list-error">오류가 발생했습니다</div>';
+    }
+}
+
+/**
+ * 저장 목록의 모든 기사 복사
+ */
+async function copyListArticles(listId) {
+    try {
+        const response = await fetch(`/api/saved-lists/${listId}`);
+        const result = await response.json();
+        
+        if (result.success && result.list) {
+            const articles = result.list.articles;
+            
+            if (articles.length === 0) {
+                showToast('⚠️ 복사할 기사가 없습니다', 'error');
+                return;
+            }
+            
+            // 제목 + 링크 형식으로 조합
+            const text = articles.map(article => 
+                `${article.title}\n${article.link}`
+            ).join('\n\n');
+            
+            // 클립보드 복사
+            await navigator.clipboard.writeText(text);
+            showToast('✅ 복사완료', 'success');
+        } else {
+            showToast('❌ 복사 실패', 'error');
+        }
+    } catch (error) {
+        showToast('❌ 복사 실패', 'error');
+    }
+}
+
+/**
+ * 저장 목록에서 개별 기사 삭제
+ */
+async function deleteArticleFromList(listId, articleId) {
+    try {
+        const response = await fetch(`/api/saved-lists/${listId}/items/${articleId}`, {
+            method: 'DELETE'
         });
         
-        container.querySelectorAll('.btn-delete-list').forEach(btn => {
-            const listId = btn.getAttribute('data-list-id');
-            btn.onclick = () => deleteSavedList(listId);
-        });
+        const result = await response.json();
         
-        addLog(`├─ [이벤트] ${lists.length}개 목록 버튼 이벤트 바인딩 완료`, 'debug');
-        addLog('[함수종료] renderSavedLists()', 'debug');
-    }, 0);
+        if (result.success) {
+            showToast('✅ 기사 삭제 완료', 'success');
+            
+            // 해당 폴더의 기사 목록만 새로고침 (토글 유지)
+            const articlesDiv = document.querySelector(`[data-list-id="${listId}"] .saved-list-articles`);
+            if (articlesDiv && articlesDiv.style.display !== 'none') {
+                articlesDiv.innerHTML = '<div class="saved-list-loading">기사 불러오는 중...</div>';
+                await loadListArticles(listId, articlesDiv);
+            }
+        } else {
+            showToast('❌ 삭제 실패', 'error');
+        }
+    } catch (error) {
+        showToast('❌ 오류 발생', 'error');
+    }
 }
 
 /**
@@ -1917,13 +2066,7 @@ async function deleteSavedList(listId) {
     addLog('[함수호출] deleteSavedList()', 'debug');
     addLog(`├─ [파라미터] listId = ${listId}`, 'debug');
     
-    if (!confirm('이 목록을 삭제하시겠습니까?')) {
-        addLog('├─ [조건분기] 사용자가 취소함', 'branch');
-        addLog('[함수종료] deleteSavedList() - 취소', 'debug');
-        addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
-        return;
-    }
-    
+    // 확인 없이 바로 삭제
     try {
         addLog(`├─ [API호출] DELETE /api/saved-lists/${listId}`, 'api');
         const response = await fetch(`/api/saved-lists/${listId}`, {
@@ -1938,13 +2081,14 @@ async function deleteSavedList(listId) {
             addLog('[함수종료] deleteSavedList() - 성공', 'debug');
             addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
             
+            showToast('✅ 삭제완료', 'success');
             // 목록 새로고침
             showSavedListPanel();
         } else {
             addLog(`├─ [에러] ${result.error}`, 'error');
             addLog('[함수종료] deleteSavedList() - 실패', 'debug');
             addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
-            alert(`삭제 실패: ${result.error}`);
+            showToast(`❌ 삭제 실패`, 'error');
         }
     } catch (error) {
         addLog(`├─ [예외발생] ${error.name}: ${error.message}`, 'error');

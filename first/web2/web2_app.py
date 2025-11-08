@@ -709,19 +709,34 @@ def create_saved_list():
     try:
         data = request.json
         name = data.get('name', '')
+        articles = data.get('articles', [])
         
         if not name:
             return jsonify({'success': False, 'error': '목록 이름이 필요합니다'}), 400
         
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute('INSERT INTO saved_lists (name) VALUES (?)', (name,))
-        conn.commit()
         
+        # 목록 생성
+        c.execute('INSERT INTO saved_lists (name) VALUES (?)', (name,))
         list_id = c.lastrowid
+        
+        # 기사 저장 (제목, 링크만)
+        for article in articles:
+            title = article.get('title', '')
+            link = article.get('link', '')
+            source = article.get('source', '')
+            published_time = article.get('published_time', '')
+            
+            c.execute('''
+                INSERT INTO saved_list_items (list_id, title, link, source, published_time)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (list_id, title, link, source, published_time))
+        
+        conn.commit()
         conn.close()
         
-        return jsonify({'success': True, 'id': list_id})
+        return jsonify({'success': True, 'id': list_id, 'saved_count': len(articles)})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -753,7 +768,7 @@ def get_saved_list_details(list_id):
                 'id': list_row[0],
                 'name': list_row[1],
                 'created_at': list_row[2],
-                'items': items_list
+                'articles': items_list
             }
         })
     except Exception as e:
