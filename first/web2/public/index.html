@@ -12,12 +12,16 @@
     <script>console.log('[테스트] HTML 버전: 20250104 - 캐시 무효화');</script>
 </head>
 <body>
+    <!-- 토스트 알림 -->
+    <div id="toast-notification" class="toast-notification">
+        <span id="toast-message">전송 완료</span>
+    </div>
+
     <div class="container">
         <!-- 페이지 최상단 영역 -->
         <div class="top-section">
             <header class="centered-header">
-                <h1>구글&네이버 뉴스 크롤러</h1>
-                <div class="version-display" id="version-display"></div>
+                <h1>구글&네이버 뉴스 크롤러 <span class="version-tag">{{ version }}</span></h1>
             </header>
         </div>
 

@@ -9,5 +9,7 @@ pystray
 Pillow
 pywin32
 psutil
+python-dotenv==1.0.0
+APScheduler==3.10.4
 
 

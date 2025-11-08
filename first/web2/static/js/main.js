@@ -982,6 +982,7 @@ function renderClippings(clippings) {
                     <input type="checkbox" data-clipping-id="${c.id}" class="toggle-clipping" ${c.is_active ? 'checked' : ''}>
                     <span class="toggle-slider"></span>
                 </label>
+                <button data-clipping-id="${c.id}" class="btn-send-clipping">전송</button>
                 <button data-clipping-id="${c.id}" class="btn-open-clipping">열기</button>
                 <button data-clipping-id="${c.id}" class="btn-delete-clipping">삭제</button>
             </div>
@@ -1003,6 +1004,12 @@ function renderClippings(clippings) {
             };
         });
         addLog(`│  ├─ [이벤트] 토글 스위치 ${clippings.length}개 등록`, 'debug');
+        
+        container.querySelectorAll('.btn-send-clipping').forEach(btn => {
+            const id = btn.getAttribute('data-clipping-id');
+            btn.onclick = () => sendClippingNow(id);
+        });
+        addLog(`│  ├─ [이벤트] 전송 버튼 ${clippings.length}개 등록`, 'debug');
         
         container.querySelectorAll('.btn-open-clipping').forEach(btn => {
             const id = btn.getAttribute('data-clipping-id');
@@ -1062,25 +1069,75 @@ function renderEmptyClipping() {
  * 클리핑 상세 모달 표시
  * @param {number|null} clippingId - 클리핑 ID (null이면 새로 생성)
  */
-function showClippingDetail(clippingId = null) {
+async function showClippingDetail(clippingId = null) {
     addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
     addLog('[함수호출] showClippingDetail()', 'debug');
     addLog(`├─ [파라미터] clippingId = ${clippingId}`, 'debug');
     
     currentClippingId = clippingId || null;
-    keywords = [];
-    addLog('├─ [변수할당] currentClippingId, keywords 초기화', 'data');
     
-    // 폼 초기화
-    if (document.getElementById('clipping-name')) document.getElementById('clipping-name').value = '';
-    if (document.getElementById('repeat-type')) document.getElementById('repeat-type').value = 'daily';
-    if (document.getElementById('send-time')) document.getElementById('send-time').value = '09:00';
-    if (document.getElementById('max-articles')) document.getElementById('max-articles').value = '10';
-    if (document.getElementById('include-summary')) document.getElementById('include-summary').checked = true;
-    if (document.getElementById('include-links')) document.getElementById('include-links').checked = true;
-    if (document.getElementById('slack-webhook-url')) document.getElementById('slack-webhook-url').value = '';
-    addLog('├─ [DOM조작] 폼 필드 초기화 완료', 'dom');
+    // 기존 클리핑을 여는 경우
+    if (clippingId) {
+        addLog('├─ [조건분기] clippingId 있음 → 서버에서 데이터 로드', 'branch');
+        
+        try {
+            addLog(`├─ [API호출] GET /api/clipping/${clippingId}`, 'api');
+            const response = await fetch(`/api/clipping/${clippingId}`);
+            addLog(`│  ├─ [응답수신] ${response.status} ${response.statusText}`, 'api');
+            
+            const result = await response.json();
+            addLog(`│  └─ [응답데이터] success = ${result.success}`, 'api');
+            
+            if (result.success && result.data) {
+                const data = result.data;
+                addLog('├─ [조건분기] 데이터 로드 성공 → 폼 채우기', 'branch');
+                
+                // 키워드 설정
+                keywords = data.keywords || [];
+                addLog(`├─ [변수할당] keywords = [${keywords.join(', ')}]`, 'data');
+                
+                // 폼 필드 채우기
+                if (document.getElementById('clipping-name')) document.getElementById('clipping-name').value = data.name || '';
+                if (document.getElementById('repeat-type')) document.getElementById('repeat-type').value = data.repeat_type || 'daily';
+                if (document.getElementById('send-time')) document.getElementById('send-time').value = data.send_time || '09:00';
+                if (document.getElementById('max-articles')) document.getElementById('max-articles').value = data.max_articles || 10;
+                if (document.getElementById('include-summary')) document.getElementById('include-summary').checked = data.include_summary !== false;
+                if (document.getElementById('include-links')) document.getElementById('include-links').checked = data.include_links !== false;
+                if (document.getElementById('slack-webhook-url')) document.getElementById('slack-webhook-url').value = data.slack_webhook_url || '';
+                addLog('├─ [DOM조작] 폼 필드에 데이터 채우기 완료', 'dom');
+            } else {
+                addLog('├─ [조건분기] 데이터 로드 실패 → 기본값 사용', 'branch');
+                keywords = [];
+            }
+        } catch (error) {
+            addLog(`├─ [예외발생] ${error.name}: ${error.message}`, 'error');
+            addLog('├─ [조건분기] 오류 발생 → 기본값 사용', 'branch');
+            keywords = [];
+        }
+    } else {
+        // 새로 생성하는 경우
+        addLog('├─ [조건분기] clippingId 없음 → 새로 생성 모드', 'branch');
+        keywords = [];
+        addLog('├─ [변수할당] keywords = [] (빈 배열)', 'data');
+        
+        // 기본 클리핑 이름 생성 (날짜 포함)
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        const defaultName = `새로운 클리핑 (${dateStr})`;
+        
+        // 폼 초기화
+        if (document.getElementById('clipping-name')) document.getElementById('clipping-name').value = defaultName;
+        if (document.getElementById('repeat-type')) document.getElementById('repeat-type').value = 'daily';
+        if (document.getElementById('send-time')) document.getElementById('send-time').value = '09:00';
+        if (document.getElementById('max-articles')) document.getElementById('max-articles').value = '10';
+        if (document.getElementById('include-summary')) document.getElementById('include-summary').checked = true;
+        if (document.getElementById('include-links')) document.getElementById('include-links').checked = true;
+        if (document.getElementById('slack-webhook-url')) document.getElementById('slack-webhook-url').value = '';
+        addLog('├─ [DOM조작] 폼 필드 초기화 완료', 'dom');
+        addLog(`├─ [기본값] 클리핑 이름 = "${defaultName}"`, 'data');
+    }
     
+    // 키워드 렌더링
     renderKeywords();
     
     // 모달 표시
@@ -1231,17 +1288,39 @@ async function saveClipping() {
     addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
     addLog('[함수호출] saveClipping()', 'debug');
     
-    const name = document.getElementById('clipping-name')?.value || '';
+    // 이름 처리
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    const defaultName = `새로운 클리핑 (${dateStr})`;
+    let name = document.getElementById('clipping-name')?.value?.trim();
+    
+    // 새로 생성 시에만 자동 이름 생성
+    if (!currentClippingId) {
+        if (!name || name === defaultName) {
+            if (keywords.length > 0) {
+                name = keywords.join(', ') + ` 클리핑 (${dateStr})`;
+                addLog(`├─ [자동생성] 키워드 기반 이름: "${name}"`, 'data');
+            } else {
+                name = defaultName;
+            }
+        }
+    } else {
+        // 수정 시: 사용자가 입력한 이름 그대로 사용
+        if (!name) {
+            name = defaultName;
+        }
+    }
+    
     addLog(`├─ [변수] name = "${name}"`, 'data');
     addLog(`├─ [변수] keywords.length = ${keywords.length}`, 'data');
     
-    // 조건 분기: 유효성 검사
-    if (!name.trim() || keywords.length === 0) {
-        addLog('├─ [조건분기] name 또는 keywords 없음 → 경고', 'branch');
+    // 조건 분기: 유효성 검사 (키워드만 체크)
+    if (keywords.length === 0) {
+        addLog('├─ [조건분기] keywords 없음 → 경고', 'branch');
         addLog('[함수종료] saveClipping() - 유효성 검사 실패', 'debug');
         addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
-        alert('이름과 키워드를 입력해주세요');
-        addLog('⚠️ 이름과 키워드를 입력해주세요', 'warning');
+        alert('키워드를 입력해주세요');
+        addLog('⚠️ 키워드를 입력해주세요', 'warning');
         return;
     }
     
@@ -1254,8 +1333,8 @@ async function saveClipping() {
         repeat_days: [],
         send_time: document.getElementById('send-time')?.value || '09:00',
         max_articles: parseInt(document.getElementById('max-articles')?.value || '10'),
-        include_summary: document.getElementById('include-summary')?.checked || true,
-        include_links: document.getElementById('include-links')?.checked || true,
+        include_summary: document.getElementById('include-summary')?.checked ?? true,
+        include_links: document.getElementById('include-links')?.checked ?? true,
         slack_webhook_url: document.getElementById('slack-webhook-url')?.value || ''
     };
     addLog(`├─ [변수] data = ${JSON.stringify(data).substring(0, 100)}...`, 'data');
@@ -1308,6 +1387,77 @@ async function saveClipping() {
  * 클리핑 삭제
  * @param {number} clippingId - 클리핑 ID
  */
+/**
+ * 클리핑 즉시 전송
+ * @param {number} clippingId - 클리핑 ID
+ */
+async function sendClippingNow(clippingId) {
+    addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
+    addLog('[함수호출] sendClippingNow()', 'debug');
+    addLog(`├─ [파라미터] clippingId = ${clippingId}`, 'debug');
+    
+    if (!confirm('이 클리핑을 Slack으로 전송하시겠습니까?\n(본문 크롤링이 진행되어 시간이 걸릴 수 있습니다)')) {
+        addLog('├─ [조건분기] 사용자가 취소함', 'branch');
+        addLog('[함수종료] sendClippingNow() - 취소', 'debug');
+        addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
+        return;
+    }
+    
+    // 전송 버튼 찾기
+    const sendBtn = document.querySelector(`.btn-send-clipping[data-clipping-id="${clippingId}"]`);
+    let originalText = '';
+    
+    try {
+        addLog(`├─ [API호출] POST /api/clipping/${clippingId}/send 시작`, 'api');
+        addLog('├─ [알림] 전송 중... 잠시만 기다려주세요', 'info');
+        
+        // 버튼 상태 변경: 전송 → 전송 중...
+        if (sendBtn) {
+            originalText = sendBtn.textContent;
+            sendBtn.textContent = '⏳ 전송 중...';
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = '0.6';
+            sendBtn.style.cursor = 'not-allowed';
+            addLog('├─ [UI] 전송 버튼 비활성화 및 텍스트 변경', 'dom');
+        }
+        
+        const response = await fetch(`/api/clipping/${clippingId}/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        addLog('├─ [API응답] 수신 완료', 'api');
+        addLog(`│  ├─ status = ${response.status}`, 'api');
+        
+        const result = await response.json();
+        addLog(`│  └─ result.success = ${result.success}`, 'api');
+        
+        if (result.success) {
+            addLog(`✅ ${result.message}`, 'success');
+            addLog('[함수종료] sendClippingNow() - 성공', 'debug');
+            showToast('✅ 전송 완료', 'success');
+        } else {
+            addLog(`├─ [에러] ${result.error}`, 'error');
+            addLog('[함수종료] sendClippingNow() - 실패', 'debug');
+            showToast(`❌ ${result.error}`, 'error');
+        }
+        addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
+    } catch (error) {
+        addLog(`├─ [예외발생] ${error.name}: ${error.message}`, 'error');
+        addLog('[함수종료] sendClippingNow() - 예외 발생', 'debug');
+        addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'system');
+        showToast(`❌ 전송 오류: ${error.message}`, 'error');
+    } finally {
+        // 버튼 상태 복구
+        if (sendBtn) {
+            sendBtn.textContent = originalText || '전송';
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = '1';
+            sendBtn.style.cursor = 'pointer';
+            addLog('├─ [UI] 전송 버튼 복구', 'dom');
+        }
+    }
+}
+
 /**
  * 클리핑 활성화/비활성화 토글
  * @param {number} clippingId - 클리핑 ID
@@ -2103,6 +2253,41 @@ function copyRecentLogsFromInput() {
     console.log('='.repeat(50));
 }
 
+// ========== 토스트 알림 함수 ==========
+/**
+ * 토스트 알림 표시 (내려왔다가 바로 올라감)
+ * @param {string} message - 표시할 메시지
+ * @param {string} type - 알림 타입 ('success', 'error', 기본값)
+ */
+function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast-notification');
+    const toastMessage = document.getElementById('toast-message');
+    
+    if (!toast || !toastMessage) {
+        console.error('[Toast] 토스트 요소를 찾을 수 없습니다');
+        return;
+    }
+    
+    // 메시지 설정
+    toastMessage.textContent = message;
+    
+    // 타입별 클래스 설정
+    toast.className = 'toast-notification';
+    if (type === 'success') {
+        toast.classList.add('success');
+    } else if (type === 'error') {
+        toast.classList.add('error');
+    }
+    
+    // 애니메이션: 내려오기
+    toast.classList.add('show');
+    
+    // 2초 후 올라가기
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2000);
+}
+
 // ========== 전역 함수 노출 (HTML onclick에서 사용) ==========
 window.testCopyFunction = testCopyFunction;
 window.copyRecentLogs = copyRecentLogs;
@@ -2120,3 +2305,4 @@ window.deleteClipping = deleteClipping;
 window.editClipping = editClipping;
 window.toggleSelection = toggleSelection;
 window.removeFromSelection = removeFromSelection;
+window.showToast = showToast;
