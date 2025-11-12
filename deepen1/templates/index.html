@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>검색 크롤러</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="logo">🔍 검색 크롤러</h1>
+            <a href="/history" class="history-link">검색 기록</a>
+        </div>
+    </header>
+
+    <!-- 메인 컨테이너 -->
+    <div class="main-container">
+        <!-- 검색 영역 -->
+        <div class="search-section">
+            <div class="search-box">
+                <input 
+                    type="text" 
+                    id="search-keyword" 
+                    class="search-input" 
+                    placeholder="검색할 키워드를 입력하세요"
+                    onkeypress="if(event.key === 'Enter') handleSearch()"
+                >
+                <button id="search-btn" class="search-button" onclick="handleSearch()">
+                    검색
+                </button>
+            </div>
+            
+            <!-- 진행 상태 -->
+            <div id="progress-container" class="progress-container" style="display: none;">
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill">0%</div>
+                </div>
+                <div id="status-message" class="status-message">준비 중...</div>
+            </div>
+        </div>
+
+        <!-- 필터 영역 (결과가 있을 때만 표시) -->
+        <div id="filter-section" class="filter-section" style="display: none;">
+            <div class="filter-container">
+                <div class="filter-item">
+                    <input type="text" id="filter-keyword" class="filter-input" placeholder="키워드 필터">
+                </div>
+                <div class="filter-item">
+                    <input type="date" id="filter-date-from" class="filter-input">
+                </div>
+                <div class="filter-item">
+                    <input type="date" id="filter-date-to" class="filter-input">
+                </div>
+                <div class="filter-item">
+                    <select id="filter-sort" class="filter-input">
+                        <option value="">기본 순서</option>
+                        <option value="view_desc">조회수 높은순</option>
+                        <option value="view_asc">조회수 낮은순</option>
+                        <option value="date_desc">최신순</option>
+                        <option value="date_asc">오래된순</option>
+                    </select>
+                </div>
+                <button class="filter-btn" onclick="applyFilters()">적용</button>
+                <button class="filter-btn-reset" onclick="resetFilters()">초기화</button>
+            </div>
+        </div>
+
+        <!-- 결과 영역 (2분할) -->
+        <div id="results-container" class="results-container">
+            <!-- 구글 결과 (왼쪽) -->
+            <div class="results-column">
+                <div class="column-header">
+                    <h2 class="column-title">🌐 구글</h2>
+                    <span class="result-count"><span id="google-count">0</span>개</span>
+                </div>
+                <div id="google-results" class="results-list">
+                    <div class="result-table">
+                        <div class="result-table-header">
+                            <div class="result-table-cell source-cell">출처</div>
+                            <div class="result-table-cell title-cell">제목</div>
+                        </div>
+                        <div class="empty-state">검색을 시작하세요</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 유튜브 결과 (오른쪽) -->
+            <div class="results-column">
+                <div class="column-header">
+                    <h2 class="column-title">🎥 유튜브</h2>
+                    <span class="result-count"><span id="youtube-count">0</span>개</span>
+                </div>
+                <div id="youtube-results" class="results-list">
+                    <div class="result-table">
+                        <div class="result-table-header">
+                            <div class="result-table-cell" style="width: 60px;">순서</div>
+                            <div class="result-table-cell" style="width: 100px;">타입</div>
+                            <div class="result-table-cell channel-cell">채널명</div>
+                            <div class="result-table-cell date-cell sortable" onclick="toggleYoutubeSort('date')">
+                                업로드일 <span class="sort-icon active">↓</span><span class="sort-icon">↑</span>
+                            </div>
+                            <div class="result-table-cell views-cell sortable" onclick="toggleYoutubeSort('views')">
+                                조회수 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
+                            </div>
+                            <div class="result-table-cell title-cell">제목</div>
+                        </div>
+                        <div class="empty-state">검색을 시작하세요</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 로그 버튼 (우측 하단 고정) -->
+    <button class="log-button" onclick="toggleLogModal()" title="크롤링 로그">
+        📋
+    </button>
+
+    <!-- 로그 플로팅 창 -->
+    <div id="log-modal" class="log-modal">
+        <div class="log-header">
+            <div class="log-title">
+                <span>📋</span>
+                <span>크롤링 로그</span>
+            </div>
+            <div class="log-actions">
+                <button class="log-action-btn log-copy-btn" onclick="copyLogs(event)">전체 복사</button>
+                <button class="log-action-btn log-close-btn" onclick="toggleLogModal()">닫기</button>
+            </div>
+        </div>
+        <div id="log-content" class="log-content">
+            <div class="log-empty">
+                <div class="log-empty-icon">📋</div>
+                <div>아직 크롤링 로그가 없습니다</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        let currentSearchId = null;
+        let currentCrawlId = null;
+
+        async function handleSearch() {
+            const keyword = document.getElementById('search-keyword').value.trim();
+            
+            if (!keyword) {
+                showAlert('키워드를 입력해주세요.', 'error');
+                return;
+            }
+            
+            // 필터 숨기기
+            document.getElementById('filter-section').style.display = 'none';
+            
+            // 크롤링 시작
+            await performSearch(keyword);
+        }
+
+        // performSearch 함수 오버라이드
+        async function performSearch(keyword) {
+            const searchBtn = document.getElementById('search-btn');
+            const googleResults = document.getElementById('google-results');
+            const youtubeResults = document.getElementById('youtube-results');
+            
+            // 검색 버튼 비활성화
+            searchBtn.disabled = true;
+            
+            // 각 결과창에 로딩 스피너 표시
+            googleResults.innerHTML = `
+                <div class="result-table">
+                    <div class="result-table-header">
+                        <div class="result-table-cell source-cell">출처</div>
+                        <div class="result-table-cell title-cell">제목</div>
+                    </div>
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>검색 중...</p>
+                    </div>
+                </div>
+            `;
+            
+            youtubeResults.innerHTML = `
+                <div class="result-table">
+                    <div class="result-table-header">
+                        <div class="result-table-cell" style="width: 60px;">순서</div>
+                        <div class="result-table-cell" style="width: 100px;">타입</div>
+                        <div class="result-table-cell channel-cell">채널명</div>
+                        <div class="result-table-cell date-cell sortable" onclick="toggleYoutubeSort('date')">
+                            업로드일 <span class="sort-icon active">↓</span><span class="sort-icon">↑</span>
+                        </div>
+                        <div class="result-table-cell views-cell sortable" onclick="toggleYoutubeSort('views')">
+                            조회수 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
+                        </div>
+                        <div class="result-table-cell title-cell">제목</div>
+                    </div>
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>검색 중...</p>
+                    </div>
+                </div>
+            `;
+            
+            try {
+                // 검색 요청
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ keyword })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || '검색 중 오류가 발생했습니다.');
+                }
+                
+                const crawlId = data.crawl_id;
+                currentCrawlId = crawlId;
+                
+                // 로그 업데이트 시작
+                startLogUpdates(crawlId);
+                
+                // 진행 상태 확인
+                const checkStatus = setInterval(async () => {
+                    try {
+                        const statusResponse = await fetch(`/crawl-status/${crawlId}`);
+                        const statusData = await statusResponse.json();
+                        
+                        console.log('[DEBUG] 상태 확인:', statusData);
+                        
+                        if (statusData.status === 'completed') {
+                            console.log('[성공] 크롤링 완료 감지!');
+                            console.log('[DEBUG] search_id:', statusData.search_id);
+                            
+                            clearInterval(checkStatus);
+                            
+                            // 로그 업데이트 중단
+                            if (logUpdateInterval) {
+                                clearInterval(logUpdateInterval);
+                                logUpdateInterval = null;
+                            }
+                            
+                            showAlert('검색이 완료되었습니다!', 'success');
+                            
+                            // 결과 표시
+                            currentSearchId = statusData.search_id;
+                            console.log('[DEBUG] loadResults 호출 시작...');
+                            await loadResults(statusData.search_id);
+                            console.log('[DEBUG] loadResults 완료!');
+                            
+                            searchBtn.disabled = false;
+                            
+                        } else if (statusData.status === 'error') {
+                            clearInterval(checkStatus);
+                            
+                            // 로그 업데이트 중단
+                            if (logUpdateInterval) {
+                                clearInterval(logUpdateInterval);
+                                logUpdateInterval = null;
+                            }
+                            
+                            showAlert(statusData.error || '크롤링 중 오류가 발생했습니다.', 'error');
+                            searchBtn.disabled = false;
+                        }
+                        
+                    } catch (error) {
+                        console.error('상태 확인 오류:', error);
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                showAlert(error.message, 'error');
+                searchBtn.disabled = false;
+            }
+        }
+
+        // 같은 페이지에 결과 로드
+        async function loadResultsInline(searchId, filters = {}) {
+            console.log('[DEBUG] loadResultsInline 시작, searchId:', searchId);
+            
+            const googleResults = document.getElementById('google-results');
+            const youtubeResults = document.getElementById('youtube-results');
+            const googleCount = document.getElementById('google-count');
+            const youtubeCount = document.getElementById('youtube-count');
+            const resultsContainer = document.getElementById('results-container');
+            const filterSection = document.getElementById('filter-section');
+            
+            // 필터 영역 표시
+            filterSection.style.display = 'block';
+            
+            // 로딩 표시
+            googleResults.innerHTML = '<div class="loading"><div class="spinner"></div><p>로딩 중...</p></div>';
+            youtubeResults.innerHTML = '<div class="loading"><div class="spinner"></div><p>로딩 중...</p></div>';
+            
+            try {
+                // 필터 파라미터 생성
+                const params = new URLSearchParams(filters);
+                
+                const apiUrl = `/api/results/${searchId}?${params}`;
+                console.log('[DEBUG] API 호출:', apiUrl);
+                
+                const response = await fetch(apiUrl);
+                console.log('[DEBUG] API 응답 상태:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`API 오류: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('[DEBUG] API 응답 데이터:', data);
+                console.log('[DEBUG] 구글 결과 수:', data.google_results?.length);
+                console.log('[DEBUG] 유튜브 결과 수:', data.youtube_results?.length);
+                
+                // 구글 결과 렌더링
+                if (data.google_results.length > 0) {
+                    googleResults.innerHTML = data.google_results.map(result => `
+                        <div class="result-card">
+                            ${result.thumbnail ? `
+                                <div class="result-thumbnail">
+                                    <img src="${result.thumbnail}" alt="${result.title}" onerror="this.parentElement.style.display='none'">
+                                </div>
+                            ` : ''}
+                            <div class="result-content">
+                                <h3 class="result-title">
+                                    <a href="${result.url}" target="_blank">${result.title}</a>
+                                </h3>
+                                <p class="result-url">${result.url}</p>
+                                ${result.snippet ? `<p class="result-snippet">${result.snippet}</p>` : ''}
+                                <div class="result-meta">
+                                    <span class="meta-badge">순위 ${result.position}</span>
+                                    ${result.published_date ? `<span class="meta-badge">${result.published_date}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    googleCount.textContent = data.google_results.length;
+                } else {
+                    googleResults.innerHTML = '<div class="empty-state">검색 결과가 없습니다</div>';
+                    googleCount.textContent = '0';
+                }
+                
+                // 유튜브 결과 렌더링
+                if (data.youtube_results.length > 0) {
+                    youtubeResults.innerHTML = data.youtube_results.map(result => `
+                        <div class="result-card">
+                            ${result.thumbnail ? `
+                                <div class="result-thumbnail">
+                                    <img src="${result.thumbnail}" alt="${result.title}">
+                                </div>
+                            ` : ''}
+                            <div class="result-content">
+                                <h3 class="result-title">
+                                    <a href="${result.url}" target="_blank">${result.title}</a>
+                                </h3>
+                                <p class="result-url">${result.url}</p>
+                                <div class="result-meta">
+                                    ${result.channel_name ? `<span class="meta-badge">👤 ${result.channel_name}</span>` : ''}
+                                    ${result.view_count ? `<span class="meta-badge">👁️ ${result.view_count}</span>` : ''}
+                                    ${result.upload_date ? `<span class="meta-badge">📅 ${result.upload_date}</span>` : ''}
+                                    <span class="meta-badge">순위 ${result.position}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    youtubeCount.textContent = data.youtube_results.length;
+                } else {
+                    youtubeResults.innerHTML = '<div class="empty-state">검색 결과가 없습니다</div>';
+                    youtubeCount.textContent = '0';
+                }
+                
+                // 결과 영역으로 스크롤
+                console.log('[DEBUG] 결과 렌더링 완료, 스크롤 이동');
+                resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+            } catch (error) {
+                console.error('[오류] 결과 로드 오류:', error);
+                console.error('[오류] 상세:', error.stack);
+                showAlert('결과를 불러오는 중 오류가 발생했습니다.', 'error');
+                
+                // 오류 시 빈 상태 표시
+                googleResults.innerHTML = '<div class="empty-state">오류가 발생했습니다</div>';
+                youtubeResults.innerHTML = '<div class="empty-state">오류가 발생했습니다</div>';
+            }
+        }
+
+        // 필터 적용
+        function applyFilters() {
+            if (!currentSearchId) return;
+            
+            const filters = {
+                keyword: document.getElementById('filter-keyword').value || '',
+                date_from: document.getElementById('filter-date-from').value || '',
+                date_to: document.getElementById('filter-date-to').value || '',
+                sort_by: document.getElementById('filter-sort').value || ''
+            };
+            
+            loadResultsInline(currentSearchId, filters);
+        }
+
+        // 필터 초기화
+        function resetFilters() {
+            if (!currentSearchId) return;
+            
+            document.getElementById('filter-keyword').value = '';
+            document.getElementById('filter-date-from').value = '';
+            document.getElementById('filter-date-to').value = '';
+            document.getElementById('filter-sort').value = '';
+            
+            loadResultsInline(currentSearchId);
+        }
+
+        // 로그 모달 토글
+        function toggleLogModal() {
+            const modal = document.getElementById('log-modal');
+            modal.classList.toggle('show');
+        }
+
+        // ESC 키로 로그 모달 닫기
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('log-modal');
+                if (modal.classList.contains('show')) {
+                    modal.classList.remove('show');
+                }
+            }
+        });
+
+        // 로그 업데이트
+        let logUpdateInterval = null;
+        
+        function startLogUpdates(crawlId) {
+            // 기존 인터벌 정리
+            if (logUpdateInterval) {
+                clearInterval(logUpdateInterval);
+            }
+            
+            console.log('[로그 업데이트] 시작:', crawlId);
+            
+            // 로그 업데이트 시작
+            logUpdateInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/logs/${crawlId}`);
+                    const data = await response.json();
+                    
+                    console.log('[로그 업데이트] 받은 로그 개수:', data.logs ? data.logs.length : 0);
+                    
+                    const logContent = document.getElementById('log-content');
+                    
+                    if (data.logs && data.logs.length > 0) {
+                        // HTML 이스케이프 처리
+                        const escapeHtml = (text) => {
+                            const div = document.createElement('div');
+                            div.textContent = text;
+                            return div.innerHTML;
+                        };
+                        
+                        logContent.innerHTML = data.logs.map((log, index) => {
+                            let className = 'log-line';
+                            if (log.includes('완료') || log.includes('성공')) {
+                                className += ' success';
+                            } else if (log.includes('오류') || log.includes('실패') || log.includes('Error')) {
+                                className += ' error';
+                            } else if (log.includes('시작') || log.includes('중...')) {
+                                className += ' info';
+                            }
+                            return `<div class="${className}" data-index="${index}">${escapeHtml(log)}</div>`;
+                        }).join('');
+                        
+                        // 자동 스크롤 (최신 로그가 보이도록)
+                        logContent.scrollTop = logContent.scrollHeight;
+                    } else {
+                        console.log('[로그 업데이트] 로그가 비어있음');
+                    }
+                } catch (error) {
+                    console.error('로그 업데이트 오류:', error);
+                }
+            }, 1000);
+        }
+
+        // 로그 전체 복사
+        async function copyLogs(event) {
+            const btn = event ? event.target : document.querySelector('.log-copy-btn');
+            
+            if (!currentCrawlId) {
+                showAlert('복사할 로그가 없습니다.', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/logs/${currentCrawlId}`);
+                const data = await response.json();
+                
+                if (data.logs && data.logs.length > 0) {
+                    const logText = data.logs.join('\n');
+                    await navigator.clipboard.writeText(logText);
+                    
+                    // 복사 완료 피드백
+                    const originalText = btn.textContent;
+                    btn.textContent = '✓ 복사 완료!';
+                    btn.style.background = '#00C853';
+                    
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                    
+                    showAlert(`${data.logs.length}개의 로그를 복사했습니다.`, 'success');
+                } else {
+                    showAlert('복사할 로그가 없습니다.', 'error');
+                }
+            } catch (error) {
+                console.error('복사 오류:', error);
+                showAlert('로그 복사에 실패했습니다: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
