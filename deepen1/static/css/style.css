@@ -441,10 +441,42 @@ body {
     overflow: hidden;
 }
 
-/* 구글 검색 결과 - 2열 */
-.source-cell {
+/* 구글 검색 결과 - 4열 */
+.position-cell {
+    width: 60px;
+    min-width: 60px;
+    flex-shrink: 0;
+    text-align: center;
+    color: #8B95A1;
+    font-size: 13px;
+}
+
+.result-table-header .position-cell {
+    color: #191F28;
+    font-weight: 700;
+}
+
+.type-cell {
     width: 100px;
     min-width: 100px;
+    flex-shrink: 0;
+    color: #8B95A1;
+    font-size: 13px;
+}
+
+.result-table-header .type-cell {
+    color: #191F28;
+    font-weight: 700;
+}
+
+.type-cell.image {
+    color: #007bff;
+    font-weight: bold;
+}
+
+.source-cell {
+    width: 150px;
+    min-width: 150px;
     flex-shrink: 0;
     color: #8B95A1;
     font-size: 13px;

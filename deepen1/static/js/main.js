@@ -354,17 +354,27 @@ async function loadResults(searchId, filters = {}) {
             googleResults.innerHTML = `
                 <div class="result-table">
                     <div class="result-table-header">
+                        <div class="result-table-cell position-cell">순서</div>
+                        <div class="result-table-cell type-cell">타입</div>
                         <div class="result-table-cell source-cell">출처</div>
                         <div class="result-table-cell title-cell">제목</div>
                     </div>
-                    ${data.google_results.map(result => `
-                        <div class="result-table-row">
-                            <div class="result-table-cell source-cell">${extractDomainName(result.url)}</div>
-                            <div class="result-table-cell title-cell">
-                                <a href="${result.url}" target="_blank">${result.title}</a>
+                    ${data.google_results.map(result => {
+                        const typeLabel = result.result_type || '일반';
+                        const typeClass = typeLabel === '이미지' ? 'type-cell image' : 'type-cell';
+                        const source = result.source || result.snippet || extractDomainName(result.url);
+                        
+                        return `
+                            <div class="result-table-row">
+                                <div class="result-table-cell position-cell">${result.position}</div>
+                                <div class="result-table-cell ${typeClass}">${typeLabel}</div>
+                                <div class="result-table-cell source-cell">${source}</div>
+                                <div class="result-table-cell title-cell">
+                                    <a href="${result.url}" target="_blank">${result.title}</a>
+                                </div>
                             </div>
-                        </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             `;
             googleCount.textContent = data.google_results.length;
@@ -372,6 +382,8 @@ async function loadResults(searchId, filters = {}) {
             googleResults.innerHTML = `
                 <div class="result-table">
                     <div class="result-table-header">
+                        <div class="result-table-cell position-cell">순서</div>
+                        <div class="result-table-cell type-cell">타입</div>
                         <div class="result-table-cell source-cell">출처</div>
                         <div class="result-table-cell title-cell">제목</div>
                     </div>

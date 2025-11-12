@@ -37,8 +37,10 @@ class GoogleResult(db.Model):
     title = db.Column(db.Text, nullable=False)
     url = db.Column(db.Text, nullable=False)
     snippet = db.Column(db.Text)
+    source = db.Column(db.String(200))  # 출처
     thumbnail = db.Column(db.Text)
     position = db.Column(db.Integer)  # 검색 순위
+    result_type = db.Column(db.String(20), default='일반')  # 타입: 일반/이미지
     published_date = db.Column(db.String(100))  # 게시일 (있는 경우)
     is_ad = db.Column(db.Boolean, default=False)  # 광고 여부
     
@@ -48,8 +50,10 @@ class GoogleResult(db.Model):
             'title': self.title,
             'url': self.url,
             'snippet': self.snippet,
+            'source': self.source,
             'thumbnail': self.thumbnail,
             'position': self.position,
+            'result_type': self.result_type,
             'published_date': self.published_date,
             'is_ad': self.is_ad
         }

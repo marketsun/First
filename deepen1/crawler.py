@@ -27,12 +27,14 @@ class MobileCrawler:
         chrome_options.add_argument(f'user-agent={user_agent}')
         
         # 기타 옵션
-        chrome_options.add_argument('--headless=new')  # 헤드리스 모드
+        # chrome_options.add_argument('--headless=new')  # 헤드리스 모드 (디버깅용 비활성화)
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        chrome_options.add_argument('--start-maximized')  # 최대화 창으로 시작
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
+        chrome_options.add_experimental_option("detach", True)  # 브라우저 유지
         
         # 봇 감지 우회
         chrome_options.add_argument('--disable-gpu')
@@ -72,13 +74,12 @@ class GoogleMobileCrawler(MobileCrawler):
         r'sponsored',
     ]
     
-    def crawl(self, keyword, max_results=50):
+    def crawl(self, keyword):
         """
-        구글 모바일 검색 결과 크롤링
+        구글 모바일 검색 결과 크롤링 (스크롤 끝까지)
         
         Args:
             keyword: 검색 키워드
-            max_results: 최대 결과 수
             
         Returns:
             list: 검색 결과 딕셔너리 리스트
@@ -89,13 +90,14 @@ class GoogleMobileCrawler(MobileCrawler):
             self.setup_driver()
             
             # 구글 검색 (모바일 버전)
-            search_url = f"https://www.google.com/search?q={keyword}&hl=ko&num=50"
+            search_url = f"https://www.google.com/search?q={keyword}&hl=ko"
             self.driver.get(search_url)
+            print(f"[구글 크롤링] URL: {search_url}")
             
-            # 페이지 로딩 대기 증가
+            # 페이지 로딩 대기
+            print("[구글 크롤링] 페이지 로딩 대기 중...")
             self.random_delay(3, 5)
             
-            # 명시적 대기
             try:
                 WebDriverWait(self.driver, 10).until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -103,98 +105,154 @@ class GoogleMobileCrawler(MobileCrawler):
             except:
                 pass
             
-            position = 1
+            # 스크롤하여 모든 결과 로드
+            print("[구글 크롤링] 페이지 스크롤 중...")
+            last_height = self.driver.execute_script("return document.body.scrollHeight")
             scroll_count = 0
-            max_scrolls = 10  # 최대 스크롤 횟수
+            max_scrolls = 10
             
-            while len(results) < max_results and scroll_count < max_scrolls:
-                # 페이지 소스 파싱
-                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            while scroll_count < max_scrolls:
+                # 스크롤 다운
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                self.random_delay(2, 3)
                 
-                # 검색 결과 추출 (데스크톱 버전)
-                # 모든 링크를 검사
-                all_links = soup.find_all('a', href=True)
+                # 새로운 높이 확인
+                new_height = self.driver.execute_script("return document.body.scrollHeight")
                 
-                processed_urls = set()
+                if new_height == last_height:
+                    # 더 이상 로드할 내용이 없으면 종료
+                    break
                 
-                for link in all_links:
-                    if len(results) >= max_results:
-                        break
+                last_height = new_height
+                scroll_count += 1
+                print(f"  [스크롤] {scroll_count}회 완료")
+            
+            print("[구글 크롤링] 페이지 파싱 시작...")
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            
+            # 검색 결과 컨테이너 찾기
+            processed_urls = set()
+            position = 1
+            
+            # 모든 검색 결과 아이템 찾기
+            all_items = soup.find_all('div', class_='kb0PBd')
+            
+            print(f"[구글 크롤링] 총 {len(all_items)}개 아이템 발견")
+            
+            for item in all_items:
+                try:
+                    # 타입 구분: 일반 링크 vs 이미지
+                    result_type = '일반'
+                    source = ''
                     
-                    try:
-                        url = link.get('href', '')
-                        
-                        # URL 정제
-                        if url.startswith('/url?q='):
-                            url = url.split('/url?q=')[1].split('&')[0]
-                        
-                        # 유효한 URL인지 확인
-                        if not url.startswith('http'):
-                            continue
-                        
-                        # 이미 처리한 URL인지 확인
-                        if url in processed_urls:
-                            continue
-                        
-                        # 광고 필터링
-                        if self._is_ad(url, link):
-                            continue
-                        
-                        # 구글 자체 링크 제외
-                        if 'google.com' in url or 'youtube.com' in url:
-                            continue
-                        
-                        # 제목 추출
-                        title_elem = link.find(['h3', 'div'])
+                    # 일반 링크 확인 (data-snf="GuLy6c")
+                    title_container = item.find('div', {'data-snf': 'GuLy6c'})
+                    if title_container:
+                        result_type = '일반'
+                        title_elem = title_container.find('span')
                         if not title_elem:
                             continue
                         title = title_elem.get_text(strip=True)
-                        if not title:
+                        
+                        # URL 찾기 (부모에서)
+                        parent = item.find_parent(['div', 'a'])
+                        link_elem = None
+                        while parent and not link_elem:
+                            link_elem = parent.find('a', class_='rTyHce', href=True)
+                            if not link_elem:
+                                parent = parent.find_parent(['div'])
+                        
+                        if not link_elem:
                             continue
                         
-                        # 스니펫 추출 (부모 요소에서)
-                        snippet = ''
-                        parent = link.find_parent(['div', 'article'])
-                        if parent:
-                            snippet_elem = parent.find(['div', 'span'], class_=re.compile(r'(VwiC3b|yXK7lf|MUxGbd)'))
-                            if snippet_elem:
-                                snippet = snippet_elem.get_text(strip=True)
+                        url = link_elem.get('href', '')
                         
-                        # 썸네일 추출
-                        thumbnail = ''
-                        img_elem = link.find('img')
+                        # 출처 찾기 (data-snf="dqs64d")
+                        source_container = item.find_parent(['div']).find('div', {'data-snf': 'dqs64d'})
+                        if source_container:
+                            source_elem = source_container.find('div', class_='GkAmnd')
+                            if source_elem:
+                                source = source_elem.get_text(strip=True)
+                    
+                    # 이미지 링크 확인 (img 태그가 있는지)
+                    else:
+                        # 아이템 내부에서 img 태그 찾기
+                        img_elem = item.find('img', alt=True)
                         if img_elem:
-                            thumbnail = img_elem.get('src', '') or img_elem.get('data-src', '')
-                        
-                        processed_urls.add(url)
-                        
-                        results.append({
-                            'title': title,
-                            'url': url,
-                            'snippet': snippet,
-                            'thumbnail': thumbnail,
-                            'position': position,
-                            'published_date': '',
-                            'is_ad': False
-                        })
-                        
-                        position += 1
-                        
-                    except Exception as e:
+                            result_type = '이미지'
+                            
+                            # 제목은 img의 alt
+                            title = img_elem.get('alt', '').strip()
+                            if not title:
+                                continue
+                            
+                            # URL 찾기 (img의 부모 a 태그)
+                            link_elem = img_elem.find_parent('a', href=True)
+                            if not link_elem:
+                                continue
+                            
+                            url = link_elem.get('href', '')
+                            
+                            # 출처는 URL에서 추출
+                            from urllib.parse import urlparse
+                            try:
+                                if url.startswith('/url?q='):
+                                    actual_url = url.split('/url?q=')[1].split('&')[0]
+                                else:
+                                    actual_url = url
+                                parsed = urlparse(actual_url)
+                                source = parsed.netloc.replace('www.', '')
+                            except:
+                                source = ''
+                        else:
+                            continue
+                    
+                    # URL 정제
+                    if url.startswith('/url?q='):
+                        url = url.split('/url?q=')[1].split('&')[0]
+                    
+                    # 유효성 검사
+                    if not url.startswith('http'):
                         continue
-                
-                # 스크롤하여 더 많은 결과 로드
-                if len(results) < max_results:
-                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                    self.random_delay(2, 3)
-                    scroll_count += 1
-                else:
-                    break
+                    
+                    if url in processed_urls:
+                        continue
+                    
+                    # 광고 필터링
+                    if self._is_ad(url, item):
+                        continue
+                    
+                    # 구글/유튜브 링크 제외
+                    if 'google.com' in url or 'youtube.com' in url:
+                        continue
+                    
+                    processed_urls.add(url)
+                    
+                    results.append({
+                        'title': title,
+                        'url': url,
+                        'snippet': source,
+                        'source': source,
+                        'thumbnail': '',
+                        'position': position,
+                        'result_type': result_type,
+                        'published_date': '',
+                        'is_ad': False
+                    })
+                    
+                    print(f"  [{result_type}] {position}. {source} - {title[:40]}...")
+                    position += 1
+                    
+                except Exception as e:
+                    print(f"  [파싱 오류] {e}")
+                    continue
             
-            print(f"구글 크롤링 완료: {len(results)}개 결과")
+            print(f"[구글 크롤링 완료] 총 {len(results)}개 결과")
             
         except Exception as e:
-            print(f"구글 크롤링 오류: {e}")
+            print(f"[구글 크롤링 오류] {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             pass  # 드라이버를 유지하여 연속 크롤링 가능
         
@@ -593,19 +651,19 @@ class YouTubeMobileCrawler(MobileCrawler):
         return shelf_data
 
 
-def crawl_all(keyword, google_max=10, youtube_max=25):
+def crawl_all(keyword):
     """구글과 유튜브를 동시에 크롤링"""
     results = {
         'google': [],
         'youtube': []
     }
     
-    # 구글 크롤링
+    # 구글 크롤링 (화면에 보이는 만큼만)
     print(f"\n{'='*50}")
     print(f"구글 검색 시작: {keyword}")
     print(f"{'='*50}")
     google_crawler = GoogleMobileCrawler()
-    results['google'] = google_crawler.crawl(keyword, max_results=google_max)
+    results['google'] = google_crawler.crawl(keyword)
     
     # 유튜브 크롤링 (일반 15개 + Shorts 2구간x5개)
     print(f"\n{'='*50}")

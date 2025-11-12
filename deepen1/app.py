@@ -94,7 +94,7 @@ def perform_crawling(keyword, crawl_id):
         sys.stdout = captured_output = io.StringIO()
         
         try:
-            results = crawl_all(keyword, google_max=50, youtube_max=50)
+            results = crawl_all(keyword)
             
             # 캡처된 출력 가져오기
             output = captured_output.getvalue()
