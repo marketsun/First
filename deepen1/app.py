@@ -131,8 +131,10 @@ def perform_crawling(keyword, crawl_id):
                     title=result['title'],
                     url=result['url'],
                     snippet=result.get('snippet', ''),
+                    source=result.get('source', ''),
                     thumbnail=result.get('thumbnail', ''),
                     position=result.get('position', 0),
+                    result_type=result.get('result_type', '일반'),
                     published_date=result.get('published_date', ''),
                     is_ad=result.get('is_ad', False)
                 )

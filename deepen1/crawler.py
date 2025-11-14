@@ -130,82 +130,41 @@ class GoogleMobileCrawler(MobileCrawler):
             print("[구글 크롤링] 페이지 파싱 시작...")
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             
-            # 검색 결과 컨테이너 찾기
-            processed_urls = set()
+            # 검색 결과 수집
+            processed_urls = {}  # {url: result_type} 형태로 저장
             position = 1
+            general_results = []
+            image_results = []
             
-            # 모든 검색 결과 아이템 찾기
+            # 1단계: 일반 링크 수집
+            print("[구글 크롤링] 1단계: 일반 링크 수집 중...")
             all_items = soup.find_all('div', class_='kb0PBd')
-            
-            print(f"[구글 크롤링] 총 {len(all_items)}개 아이템 발견")
+            print(f"  → {len(all_items)}개 아이템 발견")
             
             for item in all_items:
                 try:
-                    # 타입 구분: 일반 링크 vs 이미지
-                    result_type = '일반'
-                    source = ''
-                    
                     # 일반 링크 확인 (data-snf="GuLy6c")
                     title_container = item.find('div', {'data-snf': 'GuLy6c'})
-                    if title_container:
-                        result_type = '일반'
-                        title_elem = title_container.find('span')
-                        if not title_elem:
-                            continue
-                        title = title_elem.get_text(strip=True)
-                        
-                        # URL 찾기 (부모에서)
-                        parent = item.find_parent(['div', 'a'])
-                        link_elem = None
-                        while parent and not link_elem:
-                            link_elem = parent.find('a', class_='rTyHce', href=True)
-                            if not link_elem:
-                                parent = parent.find_parent(['div'])
-                        
-                        if not link_elem:
-                            continue
-                        
-                        url = link_elem.get('href', '')
-                        
-                        # 출처 찾기 (data-snf="dqs64d")
-                        source_container = item.find_parent(['div']).find('div', {'data-snf': 'dqs64d'})
-                        if source_container:
-                            source_elem = source_container.find('div', class_='GkAmnd')
-                            if source_elem:
-                                source = source_elem.get_text(strip=True)
+                    if not title_container:
+                        continue
                     
-                    # 이미지 링크 확인 (img 태그가 있는지)
-                    else:
-                        # 아이템 내부에서 img 태그 찾기
-                        img_elem = item.find('img', alt=True)
-                        if img_elem:
-                            result_type = '이미지'
-                            
-                            # 제목은 img의 alt
-                            title = img_elem.get('alt', '').strip()
-                            if not title:
-                                continue
-                            
-                            # URL 찾기 (img의 부모 a 태그)
-                            link_elem = img_elem.find_parent('a', href=True)
-                            if not link_elem:
-                                continue
-                            
-                            url = link_elem.get('href', '')
-                            
-                            # 출처는 URL에서 추출
-                            from urllib.parse import urlparse
-                            try:
-                                if url.startswith('/url?q='):
-                                    actual_url = url.split('/url?q=')[1].split('&')[0]
-                                else:
-                                    actual_url = url
-                                parsed = urlparse(actual_url)
-                                source = parsed.netloc.replace('www.', '')
-                            except:
-                                source = ''
-                        else:
-                            continue
+                    title_elem = title_container.find('span')
+                    if not title_elem:
+                        continue
+                    title = title_elem.get_text(strip=True)
+                    
+                    # URL 찾기 (부모에서)
+                    parent = item.find_parent(['div', 'a'])
+                    link_elem = None
+                    while parent and not link_elem:
+                        link_elem = parent.find('a', class_='rTyHce', href=True)
+                        if not link_elem:
+                            parent = parent.find_parent(['div'])
+                    
+                    if not link_elem:
+                        continue
+                    
+                    url = link_elem.get('href', '')
                     
                     # URL 정제
                     if url.startswith('/url?q='):
@@ -215,7 +174,8 @@ class GoogleMobileCrawler(MobileCrawler):
                     if not url.startswith('http'):
                         continue
                     
-                    if url in processed_urls:
+                    # 중복 체크: 같은 URL이 같은 타입으로 이미 있으면 제외
+                    if url in processed_urls and processed_urls[url] == '일반':
                         continue
                     
                     # 광고 필터링
@@ -226,28 +186,207 @@ class GoogleMobileCrawler(MobileCrawler):
                     if 'google.com' in url or 'youtube.com' in url:
                         continue
                     
-                    processed_urls.add(url)
+                    # 출처 찾기 (data-snf="dqs64d")
+                    source = ''
+                    source_container = item.find_parent(['div']).find('div', {'data-snf': 'dqs64d'})
+                    if source_container:
+                        source_elem = source_container.find('div', class_='GkAmnd')
+                        if source_elem:
+                            source = source_elem.get_text(strip=True)
                     
-                    results.append({
+                    processed_urls[url] = '일반'
+                    
+                    general_results.append({
                         'title': title,
                         'url': url,
                         'snippet': source,
                         'source': source,
                         'thumbnail': '',
-                        'position': position,
-                        'result_type': result_type,
+                        'result_type': '일반',
                         'published_date': '',
                         'is_ad': False
                     })
                     
-                    print(f"  [{result_type}] {position}. {source} - {title[:40]}...")
-                    position += 1
+                    print(f"  [일반] {len(general_results)}. {source} - {title[:40]}...")
                     
                 except Exception as e:
-                    print(f"  [파싱 오류] {e}")
                     continue
             
-            print(f"[구글 크롤링 완료] 총 {len(results)}개 결과")
+            print(f"[1단계 완료] 일반 링크 {len(general_results)}개 수집")
+            
+            # 2단계: 이미지 링크 수집
+            print("[구글 크롤링] 2단계: 이미지 링크 수집 중...")
+            
+            # 모든 이미지 섹션 찾기 (data-attrid="images universal")
+            image_sections = soup.find_all('div', attrs={'data-attrid': 'images universal'})
+            
+            if not image_sections:
+                print("  → 이미지 섹션을 찾을 수 없음")
+            else:
+                print(f"  → {len(image_sections)}개 이미지 섹션 발견")
+                
+                # 모든 섹션에서 aria-label이 있는 <a> 태그 수집
+                image_links = []
+                for section in image_sections:
+                    links = section.find_all('a', attrs={'aria-label': True, 'href': True})
+                    image_links.extend(links)
+                
+                print(f"  → 총 {len(image_links)}개 이미지 링크 발견")
+                
+                img_count = 0
+                for link in image_links:
+                    try:
+                        img_count += 1
+                        
+                        # 제목은 aria-label
+                        title = link.get('aria-label', '').strip()
+                        url = link.get('href', '')
+                        
+                        print(f"  [디버그 {img_count}] title={title[:50]}")
+                        print(f"    → 원본 URL: {url[:80]}...")
+                        
+                        if not title or len(title) < 2:
+                            print(f"    → 제목이 너무 짧아서 제외")
+                            continue
+                        
+                        # URL 정제
+                        if url.startswith('/url?q='):
+                            url = url.split('/url?q=')[1].split('&')[0]
+                            print(f"    → 정제된 URL: {url[:80]}...")
+                        
+                        # 유효성 검사
+                        if not url.startswith('http'):
+                            print(f"    → http로 시작하지 않음")
+                            continue
+                        
+                        # 중복 체크: 같은 URL이 같은 타입으로 이미 있으면 제외
+                        if url in processed_urls and processed_urls[url] == '이미지':
+                            print(f"    → 중복 URL (이미지)")
+                            continue
+                        
+                        # 구글/유튜브 링크 제외
+                        if 'google.com' in url or 'youtube.com' in url:
+                            print(f"    → 구글/유튜브 링크 제외")
+                            continue
+                        
+                        # 출처는 URL에서 추출
+                        from urllib.parse import urlparse
+                        source = ''
+                        try:
+                            parsed = urlparse(url)
+                            source = parsed.netloc.replace('www.', '')
+                            print(f"    → 출처: {source}")
+                        except Exception as e:
+                            print(f"    → 출처 추출 실패: {e}")
+                            source = ''
+                        
+                        if not source:
+                            print(f"    → 출처가 없어서 제외")
+                            continue
+                        
+                        processed_urls[url] = '이미지'
+                        
+                        # 썸네일 이미지 찾기 (같은 부모 안에서)
+                        thumbnail = ''
+                        parent = link.find_parent()
+                        if parent:
+                            img_elem = parent.find('img')
+                            if img_elem:
+                                thumbnail = img_elem.get('src', '')
+                        
+                        image_results.append({
+                            'title': title,
+                            'url': url,
+                            'snippet': source,
+                            'source': source,
+                            'thumbnail': thumbnail,
+                            'result_type': '이미지',
+                            'published_date': '',
+                            'is_ad': False
+                        })
+                        
+                        print(f"  ✅ [이미지 {len(image_results)}] {source} - {title[:40]}...")
+                        
+                        # 처음 10개만 상세 로그
+                        if img_count >= 10:
+                            print(f"  [디버그] 10개 이상 처리됨, 상세 로그 생략...")
+                            break
+                        
+                    except Exception as e:
+                        print(f"    → 예외 발생: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        continue
+                
+                # 나머지 이미지도 조용히 처리
+                if img_count >= 10:
+                    for link in image_links[10:]:
+                        try:
+                            title = link.get('aria-label', '').strip()
+                            url = link.get('href', '')
+                            
+                            if not title or len(title) < 2:
+                                continue
+                            
+                            if url.startswith('/url?q='):
+                                url = url.split('/url?q=')[1].split('&')[0]
+                            
+                            if not url.startswith('http'):
+                                continue
+                            
+                            # 중복 체크: 같은 URL이 같은 타입으로 이미 있으면 제외
+                            if url in processed_urls and processed_urls[url] == '이미지':
+                                continue
+                            
+                            if 'google.com' in url or 'youtube.com' in url:
+                                continue
+                            
+                            from urllib.parse import urlparse
+                            source = ''
+                            try:
+                                parsed = urlparse(url)
+                                source = parsed.netloc.replace('www.', '')
+                            except:
+                                source = ''
+                            
+                            if not source:
+                                continue
+                            
+                            processed_urls[url] = '이미지'
+                            
+                            thumbnail = ''
+                            parent = link.find_parent()
+                            if parent:
+                                img_elem = parent.find('img')
+                                if img_elem:
+                                    thumbnail = img_elem.get('src', '')
+                            
+                            image_results.append({
+                                'title': title,
+                                'url': url,
+                                'snippet': source,
+                                'source': source,
+                                'thumbnail': thumbnail,
+                                'result_type': '이미지',
+                                'published_date': '',
+                                'is_ad': False
+                            })
+                            
+                        except Exception as e:
+                            continue
+            
+            print(f"[2단계 완료] 이미지 링크 {len(image_results)}개 수집")
+            
+            # 3단계: 결과 합치기 (일반 + 이미지)
+            print("[구글 크롤링] 3단계: 결과 합치기...")
+            all_results = general_results + image_results
+            
+            for result in all_results:
+                result['position'] = position
+                results.append(result)
+                position += 1
+            
+            print(f"[구글 크롤링 완료] 총 {len(results)}개 결과 (일반 {len(general_results)}개 + 이미지 {len(image_results)}개)")
             
         except Exception as e:
             print(f"[구글 크롤링 오류] {e}")
@@ -293,11 +432,55 @@ class YouTubeMobileCrawler(MobileCrawler):
             except Exception as e:
                 print(f"[경고] 페이지 로딩 대기 중 오류: {e}")
             
-            # 충분히 스크롤
-            print("[유튜브 크롤링] 페이지 스크롤 중...")
-            for i in range(10):
+            # 스마트 스크롤: 목표 개수에 도달할 때까지만 스크롤
+            print("[유튜브 크롤링] 스마트 스크롤 시작...")
+            target_videos = max_regular
+            target_shorts = max_shorts_shelves
+            
+            scroll_count = 0
+            max_scroll = 10  # 최대 스크롤 횟수 (안전장치)
+            last_height = 0
+            
+            while scroll_count < max_scroll:
+                # 현재 페이지 높이
+                current_height = self.driver.execute_script("return document.body.scrollHeight")
+                
+                # 스크롤 실행
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                self.random_delay(1, 2)
+                scroll_count += 1
+                print(f"  [스크롤 {scroll_count}회] 높이: {current_height}")
+                self.random_delay(1.5, 2)
+                
+                # 현재까지 수집된 아이템 개수 체크
+                soup_temp = BeautifulSoup(self.driver.page_source, 'html.parser')
+                contents_temp = soup_temp.find('div', id='contents')
+                if not contents_temp:
+                    contents_temp = soup_temp.find('ytm-item-section-renderer')
+                if not contents_temp:
+                    contents_temp = soup_temp.find('div', {'role': 'main'})
+                if not contents_temp:
+                    contents_temp = soup_temp.find('body')
+                
+                if contents_temp:
+                    items_temp = contents_temp.find_all(class_='item')
+                    video_count = sum(1 for item in items_temp if item.name == 'ytm-video-with-context-renderer')
+                    shorts_count = sum(1 for item in items_temp if item.name in ['ytm-reel-shelf-renderer', 'grid-shelf-view-model'])
+                    
+                    print(f"    → 현재: 일반 {video_count}개, Shorts {shorts_count}개 발견")
+                    
+                    # 목표 개수 도달 확인
+                    if video_count >= target_videos and shorts_count >= target_shorts:
+                        print(f"  ✅ 목표 달성! (일반 {target_videos}개, Shorts {target_shorts}개)")
+                        break
+                
+                # 더 이상 스크롤되지 않으면 중단
+                new_height = self.driver.execute_script("return document.body.scrollHeight")
+                if new_height == last_height:
+                    print(f"  ⚠️ 더 이상 스크롤 불가 (페이지 끝)")
+                    break
+                last_height = new_height
+            
+            print(f"[스크롤 완료] 총 {scroll_count}회 스크롤")
             
             print("[유튜브 크롤링] 페이지 파싱 시작...")
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
