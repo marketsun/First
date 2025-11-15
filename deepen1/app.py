@@ -327,22 +327,10 @@ with app.app_context():
 
 
 if __name__ == '__main__':
-    import webbrowser
-    import threading
-    
-    def open_browser():
-        """서버 시작 후 브라우저 자동 열기"""
-        import time
-        time.sleep(1.5)  # 서버가 완전히 시작될 때까지 대기
-        webbrowser.open('http://localhost:5000')
-    
     print("=" * 50)
     print("구글/유튜브 모바일 검색 크롤러 시작")
-    print("브라우저가 자동으로 열립니다...")
+    print("브라우저에서 http://localhost:5000 으로 접속하세요")
     print("=" * 50)
-    
-    # 브라우저를 별도 스레드에서 열기
-    threading.Timer(1.5, lambda: webbrowser.open('http://localhost:5000')).start()
     
     app.run(debug=True, host='0.0.0.0', port=5000)
 

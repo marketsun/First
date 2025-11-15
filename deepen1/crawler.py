@@ -131,7 +131,7 @@ class GoogleMobileCrawler(MobileCrawler):
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             
             # 검색 결과 수집
-            processed_urls = {}  # {url: result_type} 형태로 저장
+            processed_urls = {}  # {(url, position): result_type} 형태로 저장 (URL+position 조합)
             position = 1
             general_results = []
             image_results = []
@@ -174,16 +174,13 @@ class GoogleMobileCrawler(MobileCrawler):
                     if not url.startswith('http'):
                         continue
                     
-                    # 중복 체크: 같은 URL이 같은 타입으로 이미 있으면 제외
-                    if url in processed_urls and processed_urls[url] == '일반':
+                    # 중복 체크: 같은 URL + position 조합이 이미 있으면 제외
+                    key = (url, position)
+                    if key in processed_urls:
                         continue
                     
                     # 광고 필터링
                     if self._is_ad(url, item):
-                        continue
-                    
-                    # 구글/유튜브 링크 제외
-                    if 'google.com' in url or 'youtube.com' in url:
                         continue
                     
                     # 출처 찾기 (data-snf="dqs64d")
@@ -194,7 +191,7 @@ class GoogleMobileCrawler(MobileCrawler):
                         if source_elem:
                             source = source_elem.get_text(strip=True)
                     
-                    processed_urls[url] = '일반'
+                    processed_urls[key] = '일반'
                     
                     general_results.append({
                         'title': title,
@@ -202,12 +199,14 @@ class GoogleMobileCrawler(MobileCrawler):
                         'snippet': source,
                         'source': source,
                         'thumbnail': '',
+                        'position': position,
                         'result_type': '일반',
                         'published_date': '',
                         'is_ad': False
                     })
                     
                     print(f"  [일반] {len(general_results)}. {source} - {title[:40]}...")
+                    position += 1
                     
                 except Exception as e:
                     continue
@@ -259,16 +258,6 @@ class GoogleMobileCrawler(MobileCrawler):
                             print(f"    → http로 시작하지 않음")
                             continue
                         
-                        # 중복 체크: 같은 URL이 같은 타입으로 이미 있으면 제외
-                        if url in processed_urls and processed_urls[url] == '이미지':
-                            print(f"    → 중복 URL (이미지)")
-                            continue
-                        
-                        # 구글/유튜브 링크 제외
-                        if 'google.com' in url or 'youtube.com' in url:
-                            print(f"    → 구글/유튜브 링크 제외")
-                            continue
-                        
                         # 출처는 URL에서 추출
                         from urllib.parse import urlparse
                         source = ''
@@ -284,7 +273,13 @@ class GoogleMobileCrawler(MobileCrawler):
                             print(f"    → 출처가 없어서 제외")
                             continue
                         
-                        processed_urls[url] = '이미지'
+                        # 중복 체크: 같은 URL + position 조합이 이미 있으면 제외
+                        key = (url, position)
+                        if key in processed_urls:
+                            print(f"    → 중복 URL+position (이미지)")
+                            continue
+                        
+                        processed_urls[key] = '이미지'
                         
                         # 썸네일 이미지 찾기 (같은 부모 안에서)
                         thumbnail = ''
@@ -300,12 +295,14 @@ class GoogleMobileCrawler(MobileCrawler):
                             'snippet': source,
                             'source': source,
                             'thumbnail': thumbnail,
+                            'position': position,
                             'result_type': '이미지',
                             'published_date': '',
                             'is_ad': False
                         })
                         
                         print(f"  ✅ [이미지 {len(image_results)}] {source} - {title[:40]}...")
+                        position += 1
                         
                         # 처음 10개만 상세 로그
                         if img_count >= 10:
@@ -334,13 +331,6 @@ class GoogleMobileCrawler(MobileCrawler):
                             if not url.startswith('http'):
                                 continue
                             
-                            # 중복 체크: 같은 URL이 같은 타입으로 이미 있으면 제외
-                            if url in processed_urls and processed_urls[url] == '이미지':
-                                continue
-                            
-                            if 'google.com' in url or 'youtube.com' in url:
-                                continue
-                            
                             from urllib.parse import urlparse
                             source = ''
                             try:
@@ -352,7 +342,12 @@ class GoogleMobileCrawler(MobileCrawler):
                             if not source:
                                 continue
                             
-                            processed_urls[url] = '이미지'
+                            # 중복 체크: 같은 URL + position 조합이 이미 있으면 제외
+                            key = (url, position)
+                            if key in processed_urls:
+                                continue
+                            
+                            processed_urls[key] = '이미지'
                             
                             thumbnail = ''
                             parent = link.find_parent()
