@@ -120,6 +120,82 @@ body {
     transform: none;
 }
 
+/* 컴팩트 레이아웃 (1/4 크기) */
+.search-box.compact-layout {
+    justify-content: flex-start;
+}
+
+.search-input.compact {
+    flex: none;
+    width: 25%;
+    min-width: 250px;
+    height: 40px;
+    padding: 0 16px;
+    font-size: 14px;
+}
+
+.search-button.compact {
+    flex: none;
+    height: 40px;
+    padding: 0 28px;
+    font-size: 14px;
+}
+
+/* 링크복사 버튼 (토스 디자인) */
+.copy-links-button {
+    flex: none;
+    height: 40px;
+    padding: 0 28px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #FFFFFF;
+    background: #00C73C;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 199, 60, 0.2);
+}
+
+.copy-links-button:hover {
+    background: #00B135;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 199, 60, 0.3);
+}
+
+.copy-links-button:active {
+    transform: translateY(0);
+}
+
+.copy-links-button.copied {
+    background: #20C997;
+    animation: pulse 0.5s ease;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+    .search-box.compact-layout {
+        flex-wrap: wrap;
+    }
+    
+    .search-input.compact {
+        width: 100%;
+        min-width: unset;
+    }
+    
+    .search-button.compact,
+    .copy-links-button {
+        width: calc(50% - 6px);
+        min-width: unset;
+    }
+}
+
 /* 진행 상태 (숨김) */
 .progress-container {
     display: none !important;

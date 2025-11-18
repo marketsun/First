@@ -64,8 +64,8 @@ class MobileCrawler:
         time.sleep(random.uniform(min_sec, max_sec))
 
 
-class GoogleMobileCrawler(MobileCrawler):
-    """구글 모바일 검색 크롤러 - 개선된 버전 (crawler_test.py에서 이식)"""
+class GoogleCrawlerTest(MobileCrawler):
+    """구글 모바일 검색 크롤러 - 테스트 버전 (필터링 완화)"""
     
     # 광고 및 필터링할 도메인 패턴
     AD_PATTERNS = [
@@ -661,8 +661,6 @@ class GoogleMobileCrawler(MobileCrawler):
                 current = parent
         
         return False
-
-
 
 
 

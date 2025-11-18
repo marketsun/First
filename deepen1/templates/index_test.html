@@ -3,14 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>검색 크롤러</title>
+    <title>🧪 테스트 크롤러 (포트 5001)</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* 테스트 페이지 표시 */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .test-badge {
+            background: #ff6b6b;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        /* 검색창 축소 및 버튼 레이아웃 */
+        .search-box {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: flex-start;
+        }
+        
+        .search-input.compact {
+            width: 20% !important;
+            min-width: 200px;
+        }
+        
+        .search-button {
+            width: 15% !important;
+            min-width: 120px;
+        }
+        
+        .copy-links-button {
+            width: 15% !important;
+            min-width: 140px;
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+        }
+        
+        .copy-links-button:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+        }
+        
+        .copy-links-button:active {
+            transform: translateY(0);
+        }
+        
+        .copy-links-button.copied {
+            background: #20c997;
+            animation: pulse 0.5s ease;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        /* 모바일 반응형 */
+        @media (max-width: 768px) {
+            .search-box {
+                flex-wrap: wrap;
+            }
+            
+            .search-input.compact {
+                width: 100% !important;
+                min-width: unset;
+            }
+            
+            .search-button,
+            .copy-links-button {
+                width: calc(50% - 5px) !important;
+                min-width: unset;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- 헤더 -->
     <header class="header">
         <div class="header-content">
-            <h1 class="logo">🔍 검색 크롤러</h1>
+            <h1 class="logo">🧪 테스트 크롤러 <span class="test-badge">TEST MODE</span></h1>
             <a href="/history" class="history-link">검색 기록</a>
         </div>
     </header>
@@ -19,7 +104,7 @@
     <div class="main-container">
         <!-- 검색 영역 -->
         <div class="search-section">
-            <div class="search-box compact-layout">
+            <div class="search-box">
                 <input 
                     type="text" 
                     id="search-keyword" 
@@ -27,11 +112,11 @@
                     placeholder="검색 키워드"
                     onkeypress="if(event.key === 'Enter') handleSearch()"
                 >
-                <button id="search-btn" class="search-button compact" onclick="handleSearch()">
-                    검색
+                <button id="search-btn" class="search-button" onclick="handleSearch()">
+                    🔍 검색
                 </button>
                 <button id="copy-links-btn" class="copy-links-button" onclick="copyAllLinks()">
-                    링크복사
+                    📋 링크복사
                 </button>
             </div>
             
@@ -322,9 +407,9 @@
                 console.log('[DEBUG] 구글 결과 수:', data.google_results?.length);
                 console.log('[DEBUG] 유튜브 결과 수:', data.youtube_results?.length);
                 
-                // 구글 결과 렌더링
+                // 구글 결과 렌더링 (순서 1부터 다시 매김)
                 if (data.google_results.length > 0) {
-                    googleResults.innerHTML = data.google_results.map(result => `
+                    googleResults.innerHTML = data.google_results.map((result, index) => `
                         <div class="result-card">
                             ${result.thumbnail ? `
                                 <div class="result-thumbnail">
@@ -338,7 +423,7 @@
                                 <p class="result-url">${result.url}</p>
                                 ${result.snippet ? `<p class="result-snippet">${result.snippet}</p>` : ''}
                                 <div class="result-meta">
-                                    <span class="meta-badge">순위 ${result.position}</span>
+                                    <span class="meta-badge">순위 ${index + 1}</span>
                                     ${result.published_date ? `<span class="meta-badge">${result.published_date}</span>` : ''}
                                 </div>
                             </div>
@@ -350,9 +435,9 @@
                     googleCount.textContent = '0';
                 }
                 
-                // 유튜브 결과 렌더링
+                // 유튜브 결과 렌더링 (순서 1부터 다시 매김)
                 if (data.youtube_results.length > 0) {
-                    youtubeResults.innerHTML = data.youtube_results.map(result => `
+                    youtubeResults.innerHTML = data.youtube_results.map((result, index) => `
                         <div class="result-card">
                             ${result.thumbnail ? `
                                 <div class="result-thumbnail">
@@ -368,7 +453,7 @@
                                     ${result.channel_name ? `<span class="meta-badge">👤 ${result.channel_name}</span>` : ''}
                                     ${result.view_count ? `<span class="meta-badge">👁️ ${result.view_count}</span>` : ''}
                                     ${result.upload_date ? `<span class="meta-badge">📅 ${result.upload_date}</span>` : ''}
-                                    <span class="meta-badge">순위 ${result.position}</span>
+                                    <span class="meta-badge">순위 ${index + 1}</span>
                                 </div>
                             </div>
                         </div>
