@@ -361,7 +361,9 @@
                             ` : ''}
                             <div class="result-content">
                                 <h3 class="result-title">
-                                    <a href="${result.url}" target="_blank">${result.title}</a>
+                                    <a href="${result.url}" target="_blank">
+                                        ${result.is_duplicate ? '[중복] ⚠️ ' : ''}${result.title}
+                                    </a>
                                 </h3>
                                 <p class="result-url">${result.url}</p>
                                 <div class="result-meta">

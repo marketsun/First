@@ -18,7 +18,7 @@ body {
 .header {
     background: #FFFFFF;
     border-bottom: 1px solid #E5E8EB;
-    padding: 20px 0;
+    padding: 4px 0;
     position: sticky;
     top: 0;
     z-index: 100;
@@ -34,8 +34,8 @@ body {
 }
 
 .logo {
-    font-size: 24px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 600;
     color: #191F28;
 }
 
@@ -57,27 +57,32 @@ body {
 .main-container {
     max-width: 100%;
     margin: 0 auto;
-    padding: 16px 24px;
+    padding: 0 24px;
 }
 
 /* 검색 영역 */
 .search-section {
-    margin-bottom: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: #F9FAFB;
+    padding-bottom: 4px;
+    margin-bottom: 0;
 }
 
 .search-box {
     display: flex;
     gap: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 0;
 }
 
 .search-input {
     flex: 1;
-    height: 56px;
-    padding: 0 20px;
-    font-size: 16px;
+    height: 36px;
+    padding: 0 16px;
+    font-size: 14px;
     border: 1px solid #E5E8EB;
-    border-radius: 12px;
+    border-radius: 8px;
     background: #FFFFFF;
     transition: all 0.2s;
 }
@@ -93,14 +98,14 @@ body {
 }
 
 .search-button {
-    height: 56px;
-    padding: 0 32px;
-    font-size: 16px;
+    height: 36px;
+    padding: 0 24px;
+    font-size: 14px;
     font-weight: 600;
     color: #FFFFFF;
     background: #3182F6;
     border: none;
-    border-radius: 12px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;
@@ -144,14 +149,14 @@ body {
 /* 링크복사 버튼 (토스 디자인) */
 .copy-links-button {
     flex: none;
-    height: 40px;
-    padding: 0 28px;
+    height: 36px;
+    padding: 0 24px;
     font-size: 14px;
     font-weight: 600;
     color: #FFFFFF;
     background: #00C73C;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
     white-space: nowrap;
@@ -305,25 +310,30 @@ body {
 .results-container {
     display: flex;
     gap: 2px;
-    align-items: flex-start;
     background: #E5E8EB;
+    height: calc(100vh - 100px); /* 헤더 + 검색영역 높이 제외 (극소화) */
 }
 
 .results-column {
     flex: 1;
     min-width: 0;
     background: #FFFFFF;
-    padding: 24px;
-    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* flex 자식의 overflow를 위해 필수 */
 }
 
 .column-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
+    padding: 8px 24px;
     border-bottom: 2px solid #E5E8EB;
+    flex-shrink: 0; /* 헤더는 축소 안 됨 */
+    position: sticky;
+    top: 0;
+    background: #FFFFFF;
+    z-index: 10;
 }
 
 .column-header-left {
@@ -339,8 +349,8 @@ body {
 }
 
 .column-title {
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 600;
     color: #191F28;
     display: flex;
     align-items: center;
@@ -349,19 +359,19 @@ body {
 
 .column-title::before {
     content: '';
-    width: 4px;
-    height: 24px;
+    width: 3px;
+    height: 16px;
     background: #3182F6;
     border-radius: 2px;
 }
 
 .result-count {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 600;
     color: #3182F6;
-    padding: 6px 12px;
+    padding: 4px 8px;
     background: #EFF4FF;
-    border-radius: 20px;
+    border-radius: 12px;
 }
 
 /* 정렬 가능한 헤더 */
@@ -394,6 +404,9 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    flex: 1; /* 남은 공간 모두 차지 */
+    overflow-y: auto; /* 세로 스크롤 */
+    padding: 8px 24px;
 }
 
 /* 결과 카드 (토스 스타일) */
@@ -491,9 +504,9 @@ body {
 
 .result-table-header {
     display: flex;
-    padding: 12px 0;
+    padding: 4px 0;
     border-bottom: 2px solid #E5E8EB;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 14px;
     color: #191F28;
     background: #F9FAFB;
@@ -501,7 +514,7 @@ body {
 
 .result-table-row {
     display: flex;
-    padding: 6px 0;
+    padding: 4px 0;
     border-bottom: 1px solid #F2F4F6;
     transition: background 0.2s;
 }
@@ -515,6 +528,7 @@ body {
     display: flex;
     align-items: center;
     overflow: hidden;
+    font-size: 13px;
 }
 
 /* 구글 검색 결과 - 4열 */
@@ -572,7 +586,7 @@ body {
     color: #191F28;
     text-decoration: none;
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.5;
     display: block;
     overflow: hidden;

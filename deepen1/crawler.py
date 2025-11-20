@@ -136,11 +136,16 @@ class GoogleMobileCrawler(MobileCrawler):
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             
             # 검색 결과 수집
-            prev_url = None  # 연속 중복 체크용 (바로 직전 URL만 기억)
             position = 1
-            processed_titles = set()  # 중복 제목 체크용
             general_results = []
             image_results = []
+            
+            # 위치 기반 중복 제거용
+            processed_items = {}  # {(url, title): last_position} - URL + 제목 조합으로 중복 체크
+            position_threshold = 10  # 10개 이내 거리면 같은 구간으로 간주
+            valid_link_position = 0  # 유효한 링크만 카운트 (필터링 통과한 링크)
+            last_collected_url = None  # 바로 이전 수집 URL
+            last_collected_title = None  # 바로 이전 수집 제목
             
             # 1단계: 모든 링크 수집 (순서 유지)
             print("[구글 크롤링] 1단계: 모든 링크 수집 중...")
@@ -166,20 +171,45 @@ class GoogleMobileCrawler(MobileCrawler):
                     if not url:
                         continue
                     
-                    # URL 정제
-                    if url.startswith('/url?q='):
+                    # URL 정제 (더 강력하게)
+                    if '/url?q=' in url:
+                        # /url?q= 또는 google.com/url?q= 모두 처리
                         url = url.split('/url?q=')[1].split('&')[0]
+                    
+                    # URL 디코딩
+                    from urllib.parse import unquote
+                    url = unquote(url)
                     
                     # http로 시작하지 않으면 건너뜀
                     if not url.startswith('http'):
                         continue
                     
-                    # 구글 링크 전부 제외
+                    # 구글 링크 전부 제외 (정제 후에 체크)
                     if 'google.com' in url or 'goo.gl' in url:
+                        print(f"  [구글링크제외] {url[:50]}...")
                         continue
                     
-                    # 연속 중복 체크
-                    if url == prev_url:
+                    # aria-expanded 팝업/드롭다운 내부 링크 제외
+                    # 링크의 부모 요소들을 탐색하면서 aria-expanded 확인
+                    is_in_popup = False
+                    current_elem = link_elem
+                    for _ in range(10):  # 최대 10단계 부모까지 확인
+                        parent = current_elem.find_parent() if current_elem else None
+                        if not parent:
+                            break
+                        
+                        # aria-expanded 속성 확인
+                        aria_expanded = parent.get('aria-expanded')
+                        if aria_expanded is not None:
+                            # aria-expanded가 있으면 팝업/드롭다운으로 간주
+                            is_in_popup = True
+                            if 'samsung' in url.lower():
+                                print(f"  [팝업내부링크] {url[:50]}... (aria-expanded={aria_expanded})")
+                            break
+                        
+                        current_elem = parent
+                    
+                    if is_in_popup:
                         continue
                     
                     # 이제 링크를 기준으로 제목과 출처 찾기
@@ -226,8 +256,10 @@ class GoogleMobileCrawler(MobileCrawler):
                         if len(link_text) > 10:
                             title = link_text
                     
-                    # 제목이 없으면 건너뜀
-                    if not title or len(title) < 5:
+                    # 제목이 없으면 건너뜀 (빈 문자열만 제외)
+                    if not title:
+                        if 'samsung' in url.lower():
+                            print(f"  [제목없음] {url[:50]}... (제목: '{title}')")
                         continue
                     
                     # 제목 정제: URL 프로토콜 및 불필요한 문자 제거
@@ -243,13 +275,43 @@ class GoogleMobileCrawler(MobileCrawler):
                         if len(domain_parts) >= 2:
                             title = domain_parts[0]  # samsung.com -> samsung
                     
-                    # 제목이 너무 짧으면 건너뜀
-                    if len(title) < 3:
+                    # 제목이 없으면 건너뜀 (빈 문자열만 제외)
+                    if not title:
+                        if 'samsung' in url.lower():
+                            print(f"  [제목없음-정제후] {url[:50]}... (제목: '{title}')")
                         continue
                     
-                    # 중복 제목 체크
-                    if title in processed_titles:
+                    # ========================================
+                    # 여기까지 통과하면 유효한 링크!
+                    # 이제 position 증가 및 중복 체크
+                    # ========================================
+                    
+                    valid_link_position += 1  # 유효한 링크만 카운트
+                    
+                    # 1순위: 연속 중복 체크 (바로 이전 항목과 URL이 같으면 무조건 제거)
+                    if url == last_collected_url:
+                        if 'samsung' in url.lower() and 'tablet' in title.lower():
+                            print(f"  [연속중복-samsung] {url[:50]}... (제목: {title[:30]}...)")
+                        else:
+                            print(f"  [연속중복] {url[:30]}... (제목: {title[:30]}...)")
                         continue
+                    
+                    # 2순위: 위치 기반 중복 체크 (URL + 제목 조합으로 같은 구간 내 중복 제거)
+                    item_key = (url, title)  # URL + 제목 조합
+                    
+                    if item_key in processed_items:
+                        last_position = processed_items[item_key]
+                        distance = valid_link_position - last_position
+                        
+                        # 거리가 threshold 이내면 같은 구간 (중복 제거)
+                        if distance < position_threshold:
+                            print(f"  [구간중복] {url[:30]}... - {title[:30]}... (거리: {distance})")
+                            continue
+                    
+                    # 현재 위치 저장
+                    processed_items[item_key] = valid_link_position
+                    last_collected_url = url
+                    last_collected_title = title
                     
                     # 출처는 항상 URL 도메인에서 추출 (가장 정확함)
                     from urllib.parse import urlparse
@@ -371,10 +433,6 @@ class GoogleMobileCrawler(MobileCrawler):
                     if result_type == '일반':
                         if 'instagram.com' in url or 'facebook.com' in url:
                             result_type = 'SNS'
-                    
-                    # 현재 URL과 제목 저장 (다음 반복에서 비교용)
-                    prev_url = url
-                    processed_titles.add(title)
                     
                     general_results.append({
                         'title': title,
@@ -669,7 +727,7 @@ class GoogleMobileCrawler(MobileCrawler):
 class YouTubeMobileCrawler(MobileCrawler):
     """유튜브 모바일 검색 크롤러 (일반 동영상 + Shorts)"""
     
-    def crawl(self, keyword, max_regular=15, max_shorts_shelves=2, shorts_per_shelf=5):
+    def crawl(self, keyword, max_regular=15, max_shorts_shelves=2, shorts_per_shelf=4):
         """유튜브 모바일 검색 결과 크롤링 (실제 화면 순서대로)"""
         results = []
         
@@ -1000,9 +1058,14 @@ class YouTubeMobileCrawler(MobileCrawler):
             print(f"    [경고] Shorts 아이템을 찾을 수 없습니다. element: {element.name}")
             return []
         
-        print(f"    [디버그] {len(shorts_in_shelf)}개 Shorts 발견 (최대 {shorts_per_shelf}개 수집)")
+        print(f"    [디버그] {len(shorts_in_shelf)}개 Shorts 발견 (정확히 {shorts_per_shelf}개 수집)")
         
-        for short in shorts_in_shelf[:shorts_per_shelf]:
+        collected_count = 0
+        for short in shorts_in_shelf:
+            # 정확히 shorts_per_shelf(4)개만 수집
+            if collected_count >= shorts_per_shelf:
+                break
+            
             try:
                 link = short.find('a', class_='shortsLockupViewModelHostEndpoint')
                 if not link:
@@ -1016,8 +1079,8 @@ class YouTubeMobileCrawler(MobileCrawler):
                 
                 video_id = short_url.split('/shorts/')[1].split('?')[0]
                 
-                if video_id in processed_video_ids:
-                    continue
+                # 중복 체크 (제거하지 않고 플래그만 설정)
+                is_duplicate = video_id in processed_video_ids
                 
                 title = ''
                 title_h3 = short.find('h3', class_='shortsLockupViewModelHostMetadataTitle')
@@ -1067,7 +1130,9 @@ class YouTubeMobileCrawler(MobileCrawler):
                             upload_date = date_span.get_text(strip=True)
                             upload_timestamp = self._parse_upload_date(upload_date)
                 
-                processed_video_ids.add(video_id)
+                # 중복이 아닐 때만 processed_video_ids에 추가
+                if not is_duplicate:
+                    processed_video_ids.add(video_id)
                 
                 shelf_data.append({
                     'title': title,
@@ -1083,9 +1148,13 @@ class YouTubeMobileCrawler(MobileCrawler):
                     'duration': '',
                     'position': 0,
                     'is_short': True,
+                    'is_duplicate': is_duplicate,
                     'short_shelf_index': 0,
                     'position_in_shelf': 0
                 })
+                
+                collected_count += 1
+                print(f"      [Shorts {collected_count}/{shorts_per_shelf}] {title[:30]}... {'[중복]' if is_duplicate else ''}")
                 
             except Exception as e:
                 print(f"    [Shorts 파싱 오류] {e}")
