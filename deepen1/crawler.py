@@ -111,23 +111,54 @@ class GoogleMobileCrawler(MobileCrawler):
             except:
                 pass
             
-            # 스크린샷 저장 (스크롤 전) - CDP 방식으로 전체 페이지 캡처
+            # 스크린샷 저장 - 조금씩 스크롤하면서 이미지 로드 후 캡처
             if screenshot_path:
                 try:
                     import base64
                     
-                    # 스크롤 최상단으로 이동
+                    print("[구글 크롤링] 스크린샷 준비: 이미지 로드를 위한 스크롤 시작...")
+                    
+                    # 1단계: 최상단으로 이동
                     self.driver.execute_script("window.scrollTo(0, 0);")
                     time.sleep(1)
                     
-                    # CDP를 사용하여 전체 페이지 크기 가져오기
+                    # 2단계: 전체 페이지 높이 확인 (고정)
+                    total_height = self.driver.execute_script("return document.body.scrollHeight")
+                    viewport_height = self.driver.execute_script("return window.innerHeight")
+                    
+                    print(f"  → 전체 높이: {total_height}px, 뷰포트: {viewport_height}px")
+                    
+                    # 3단계: 조금씩 스크롤하면서 이미지 로드
+                    scroll_step = 350  # 350px씩 작게 스크롤
+                    current_position = 0
+                    scroll_count = 0
+                    
+                    while current_position < total_height:
+                        current_position += scroll_step
+                        self.driver.execute_script(f"window.scrollTo(0, {current_position});")
+                        scroll_count += 1
+                        print(f"  [스크롤 {scroll_count}] 위치: {current_position}/{total_height}px")
+                        
+                        # 페이지 끝에 도달하면 중단
+                        if current_position >= total_height:
+                            break
+                    
+                    # 4단계: 마지막 대기 (모든 이미지 로드 완료)
+                    print("  → 이미지 로드 대기 중...")
+                    time.sleep(2)
+                    
+                    # 5단계: 다시 최상단으로 이동
+                    self.driver.execute_script("window.scrollTo(0, 0);")
+                    time.sleep(1)
+                    
+                    # 6단계: 전체 페이지 크기 가져오기
                     metrics = self.driver.execute_cdp_cmd('Page.getLayoutMetrics', {})
                     width = metrics['contentSize']['width']
                     height = metrics['contentSize']['height']
                     
-                    print(f"[구글 크롤링] 페이지 크기: {width}x{height}")
+                    print(f"[구글 크롤링] 최종 페이지 크기: {width}x{height}")
                     
-                    # CDP를 사용하여 전체 페이지 스크린샷 캡처
+                    # 7단계: CDP를 사용하여 전체 페이지 스크린샷 캡처
                     screenshot = self.driver.execute_cdp_cmd('Page.captureScreenshot', {
                         'clip': {
                             'width': width,
@@ -817,7 +848,7 @@ class YouTubeMobileCrawler(MobileCrawler):
                     
                     # 2단계: 조금씩 스크롤 (필요한 만큼만)
                     scroll_step = 350  # 350px씩 작게 스크롤
-                    max_scrolls = 17   # 최대 17회 스크롤 (약 5950px, 충분한 양)
+                    max_scrolls = 20   # 최대 20회 스크롤 (약 7000px, 충분한 양)
                     current_position = 0
                     
                     print(f"  → 스크롤 간격: {scroll_step}px, 최대: {max_scrolls}회")
