@@ -79,12 +79,13 @@ class GoogleMobileCrawler(MobileCrawler):
         r'advertisement',
     ]
     
-    def crawl(self, keyword):
+    def crawl(self, keyword, screenshot_path=None):
         """
         구글 모바일 검색 결과 크롤링 (스크롤 끝까지)
         
         Args:
             keyword: 검색 키워드
+            screenshot_path: 스크린샷 저장 경로 (옵션)
             
         Returns:
             list: 검색 결과 딕셔너리 리스트
@@ -109,6 +110,44 @@ class GoogleMobileCrawler(MobileCrawler):
                 )
             except:
                 pass
+            
+            # 스크린샷 저장 (스크롤 전) - CDP 방식으로 전체 페이지 캡처
+            if screenshot_path:
+                try:
+                    import base64
+                    
+                    # 스크롤 최상단으로 이동
+                    self.driver.execute_script("window.scrollTo(0, 0);")
+                    time.sleep(1)
+                    
+                    # CDP를 사용하여 전체 페이지 크기 가져오기
+                    metrics = self.driver.execute_cdp_cmd('Page.getLayoutMetrics', {})
+                    width = metrics['contentSize']['width']
+                    height = metrics['contentSize']['height']
+                    
+                    print(f"[구글 크롤링] 페이지 크기: {width}x{height}")
+                    
+                    # CDP를 사용하여 전체 페이지 스크린샷 캡처
+                    screenshot = self.driver.execute_cdp_cmd('Page.captureScreenshot', {
+                        'clip': {
+                            'width': width,
+                            'height': height,
+                            'x': 0,
+                            'y': 0,
+                            'scale': 1
+                        },
+                        'captureBeyondViewport': True
+                    })
+                    
+                    # Base64 디코딩 후 파일로 저장
+                    with open(screenshot_path, 'wb') as f:
+                        f.write(base64.b64decode(screenshot['data']))
+                    
+                    print(f"[구글 크롤링] 전체 페이지 스크린샷 저장: {screenshot_path}")
+                except Exception as e:
+                    print(f"[구글 크롤링] 스크린샷 저장 실패: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             # 스크롤하여 모든 결과 로드
             print("[구글 크롤링] 페이지 스크롤 중...")
@@ -171,6 +210,9 @@ class GoogleMobileCrawler(MobileCrawler):
                     if not url:
                         continue
                     
+                    # 디버깅: 모든 링크 출력 (필터링 전)
+                    # print(f"  [디버그-원본링크] {url}")
+                    
                     # URL 정제 (더 강력하게)
                     if '/url?q=' in url:
                         # /url?q= 또는 google.com/url?q= 모두 처리
@@ -182,11 +224,12 @@ class GoogleMobileCrawler(MobileCrawler):
                     
                     # http로 시작하지 않으면 건너뜀
                     if not url.startswith('http'):
+                        print(f"  [http아님] {url}")
                         continue
                     
                     # 구글 링크 전부 제외 (정제 후에 체크)
                     if 'google.com' in url or 'goo.gl' in url:
-                        print(f"  [구글링크제외] {url[:50]}...")
+                        print(f"  [구글링크제외] {url}")
                         continue
                     
                     # aria-expanded 팝업/드롭다운 내부 링크 제외
@@ -204,7 +247,7 @@ class GoogleMobileCrawler(MobileCrawler):
                             # aria-expanded가 있으면 팝업/드롭다운으로 간주
                             is_in_popup = True
                             if 'samsung' in url.lower():
-                                print(f"  [팝업내부링크] {url[:50]}... (aria-expanded={aria_expanded})")
+                                print(f"  [팝업내부링크] {url} (aria-expanded={aria_expanded})")
                             break
                         
                         current_elem = parent
@@ -234,7 +277,7 @@ class GoogleMobileCrawler(MobileCrawler):
                     # 방법 3: 링크의 aria-label
                     if not title:
                         aria_label = link_elem.get('aria-label')
-                        if aria_label and len(aria_label) > 10:  # 의미 있는 길이
+                        if aria_label and len(aria_label) >= 2:  # 2자 이상
                             title = aria_label
                     
                     # 방법 4: 링크 내부의 가장 긴 텍스트
@@ -243,7 +286,7 @@ class GoogleMobileCrawler(MobileCrawler):
                         inner_texts = []
                         for elem in link_elem.find_all(['div', 'span', 'h1', 'h2', 'h3', 'h4']):
                             text = elem.get_text(strip=True)
-                            if len(text) > 10 and 'http' not in text.lower():
+                            if len(text) >= 2 and 'http' not in text.lower():
                                 inner_texts.append(text)
                         
                         # 가장 긴 텍스트 선택
@@ -253,13 +296,12 @@ class GoogleMobileCrawler(MobileCrawler):
                     # 방법 5: 링크 전체 텍스트 (마지막 수단)
                     if not title:
                         link_text = link_elem.get_text(strip=True)
-                        if len(link_text) > 10:
+                        if len(link_text) >= 2:
                             title = link_text
                     
                     # 제목이 없으면 건너뜀 (빈 문자열만 제외)
                     if not title:
-                        if 'samsung' in url.lower():
-                            print(f"  [제목없음] {url[:50]}... (제목: '{title}')")
+                        print(f"  [제목없음] {url} (제목: '{title}')")
                         continue
                     
                     # 제목 정제: URL 프로토콜 및 불필요한 문자 제거
@@ -277,8 +319,7 @@ class GoogleMobileCrawler(MobileCrawler):
                     
                     # 제목이 없으면 건너뜀 (빈 문자열만 제외)
                     if not title:
-                        if 'samsung' in url.lower():
-                            print(f"  [제목없음-정제후] {url[:50]}... (제목: '{title}')")
+                        print(f"  [제목없음-정제후] {url} (제목: '{title}')")
                         continue
                     
                     # ========================================
@@ -291,9 +332,9 @@ class GoogleMobileCrawler(MobileCrawler):
                     # 1순위: 연속 중복 체크 (바로 이전 항목과 URL이 같으면 무조건 제거)
                     if url == last_collected_url:
                         if 'samsung' in url.lower() and 'tablet' in title.lower():
-                            print(f"  [연속중복-samsung] {url[:50]}... (제목: {title[:30]}...)")
+                            print(f"  [연속중복-samsung] {url} (제목: {title})")
                         else:
-                            print(f"  [연속중복] {url[:30]}... (제목: {title[:30]}...)")
+                            print(f"  [연속중복] {url} (제목: {title})")
                         continue
                     
                     # 2순위: 위치 기반 중복 체크 (URL + 제목 조합으로 같은 구간 내 중복 제거)
@@ -305,7 +346,7 @@ class GoogleMobileCrawler(MobileCrawler):
                         
                         # 거리가 threshold 이내면 같은 구간 (중복 제거)
                         if distance < position_threshold:
-                            print(f"  [구간중복] {url[:30]}... - {title[:30]}... (거리: {distance})")
+                            print(f"  [구간중복] {url} - {title} (거리: {distance})")
                             continue
                     
                     # 현재 위치 저장
@@ -446,7 +487,7 @@ class GoogleMobileCrawler(MobileCrawler):
                         'is_ad': is_ad
                     })
                     
-                    print(f"  [{result_type:6s}] {len(general_results)}. {source:20s} - {title[:40]}...")
+                    print(f"  [{result_type:6s}] {len(general_results)}. {source:20s} - {title}")
                     
                 except Exception as e:
                     print(f"  ⚠️ 아이템 처리 중 오류: {e}")
@@ -482,8 +523,8 @@ class GoogleMobileCrawler(MobileCrawler):
                         title = link.get('aria-label', '').strip()
                         url = link.get('href', '')
                         
-                        print(f"  [디버그 {img_count}] title={title[:50]}")
-                        print(f"    → 원본 URL: {url[:80]}...")
+                        print(f"  [디버그 {img_count}] title={title}")
+                        print(f"    → 원본 URL: {url}")
                         
                         # 제목이 없으면 "제목 없음"으로 표시
                         if not title or len(title) < 2:
@@ -493,7 +534,7 @@ class GoogleMobileCrawler(MobileCrawler):
                         # URL 정제
                         if url.startswith('/url?q='):
                             url = url.split('/url?q=')[1].split('&')[0]
-                            print(f"    → 정제된 URL: {url[:80]}...")
+                            print(f"    → 정제된 URL: {url}")
                         
                         # 유효성 검사 (최소한만)
                         if not url.startswith('http'):
@@ -540,7 +581,7 @@ class GoogleMobileCrawler(MobileCrawler):
                         
                         # 연속 중복 체크: 바로 직전 URL과 같으면 건너뜀
                         if url == prev_url:
-                            print(f"    → 연속 중복 제거 (이미지): {url[:50]}...")
+                            print(f"    → 연속 중복 제거 (이미지): {url}")
                             continue
                         
                         result_type = '이미지'
@@ -568,7 +609,7 @@ class GoogleMobileCrawler(MobileCrawler):
                             'is_ad': False
                         })
                         
-                        print(f"  ✅ [이미지 {position}] {source} - {title[:40]}...")
+                        print(f"  ✅ [이미지 {position}] {source} - {title}")
                         position += 1
                         
                         # 처음 10개만 상세 로그
@@ -727,7 +768,7 @@ class GoogleMobileCrawler(MobileCrawler):
 class YouTubeMobileCrawler(MobileCrawler):
     """유튜브 모바일 검색 크롤러 (일반 동영상 + Shorts)"""
     
-    def crawl(self, keyword, max_regular=15, max_shorts_shelves=2, shorts_per_shelf=4):
+    def crawl(self, keyword, max_regular=15, max_shorts_shelves=2, shorts_per_shelf=4, screenshot_path=None):
         """유튜브 모바일 검색 결과 크롤링 (실제 화면 순서대로)"""
         results = []
         
@@ -750,6 +791,78 @@ class YouTubeMobileCrawler(MobileCrawler):
             except Exception as e:
                 print(f"[경고] 페이지 로딩 대기 중 오류: {e}")
             
+            # 이미지 로드 대기 (추가)
+            print("[유튜브 크롤링] 썸네일 이미지 로딩 대기 중...")
+            try:
+                # 이미지가 로드될 때까지 대기
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "img"))
+                )
+                # 추가 대기 시간 (이미지가 실제로 로드되도록)
+                time.sleep(3)
+                print("[유튜브 크롤링] 이미지 로드 완료")
+            except Exception as e:
+                print(f"[경고] 이미지 로드 대기 중 오류: {e}")
+            
+            # 스크린샷 저장 - 조금씩 스크롤하면서 이미지 로드 후 캡처
+            if screenshot_path:
+                try:
+                    import base64
+                    
+                    print("[유튜브 크롤링] 스크린샷 준비: 이미지 로드를 위한 스크롤 시작...")
+                    
+                    # 1단계: 최상단으로 이동
+                    self.driver.execute_script("window.scrollTo(0, 0);")
+                    time.sleep(1)
+                    
+                    # 2단계: 조금씩 스크롤 (필요한 만큼만)
+                    scroll_step = 350  # 350px씩 작게 스크롤
+                    max_scrolls = 17   # 최대 17회 스크롤 (약 5950px, 충분한 양)
+                    current_position = 0
+                    
+                    print(f"  → 스크롤 간격: {scroll_step}px, 최대: {max_scrolls}회")
+                    
+                    for i in range(max_scrolls):
+                        current_position += scroll_step
+                        self.driver.execute_script(f"window.scrollTo(0, {current_position});")
+                        print(f"  [스크롤 {i+1}/{max_scrolls}] 위치: {current_position}px")
+                    
+                    # 3단계: 마지막 대기 (모든 이미지 로드 완료)
+                    print("  → 이미지 로드 대기 중...")
+                    time.sleep(3)
+                    
+                    # 4단계: 다시 최상단으로 이동
+                    self.driver.execute_script("window.scrollTo(0, 0);")
+                    time.sleep(1)
+                    
+                    # 5단계: 스크린샷 영역 계산 (스크롤한 만큼만)
+                    screenshot_height = current_position + 915  # 마지막 스크롤 위치 + 뷰포트 높이
+                    width = 412  # 모바일 너비 고정
+                    
+                    print(f"[유튜브 크롤링] 스크린샷 크기: {width}x{screenshot_height}")
+                    
+                    # 6단계: CDP를 사용하여 스크린샷 캡처 (스크롤한 영역만)
+                    screenshot = self.driver.execute_cdp_cmd('Page.captureScreenshot', {
+                        'clip': {
+                            'width': width,
+                            'height': screenshot_height,
+                            'x': 0,
+                            'y': 0,
+                            'scale': 1
+                        },
+                        'captureBeyondViewport': True
+                    })
+                    
+                    # Base64 디코딩 후 파일로 저장
+                    with open(screenshot_path, 'wb') as f:
+                        f.write(base64.b64decode(screenshot['data']))
+                    
+                    print(f"[유튜브 크롤링] 스크린샷 저장 완료: {screenshot_path}")
+                except Exception as e:
+                    print(f"[유튜브 크롤링] 스크린샷 저장 실패: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
             # 스마트 스크롤: 목표 개수에 도달할 때까지만 스크롤
             print("[유튜브 크롤링] 스마트 스크롤 시작...")
             target_videos = max_regular
@@ -767,7 +880,8 @@ class YouTubeMobileCrawler(MobileCrawler):
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 scroll_count += 1
                 print(f"  [스크롤 {scroll_count}회] 높이: {current_height}")
-                self.random_delay(1.5, 2)
+                # 스크롤 후 이미지 로딩을 위한 대기 시간 증가
+                time.sleep(3)
                 
                 # 현재까지 수집된 아이템 개수 체크
                 soup_temp = BeautifulSoup(self.driver.page_source, 'html.parser')
@@ -859,7 +973,7 @@ class YouTubeMobileCrawler(MobileCrawler):
                         if video_data:
                             videos.append(video_data)
                             video_count += 1
-                            print(f"  [일반 영상 {video_count}/{max_regular}] {video_data['title'][:30]}...")
+                            print(f"  [일반 영상 {video_count}/{max_regular}] {video_data['title']}")
                     except Exception as e:
                         print(f"  [일반 영상 파싱 오류] {e}")
                         continue
@@ -1154,7 +1268,7 @@ class YouTubeMobileCrawler(MobileCrawler):
                 })
                 
                 collected_count += 1
-                print(f"      [Shorts {collected_count}/{shorts_per_shelf}] {title[:30]}... {'[중복]' if is_duplicate else ''}")
+                print(f"      [Shorts {collected_count}/{shorts_per_shelf}] {title} {'[중복]' if is_duplicate else ''}")
                 
             except Exception as e:
                 print(f"    [Shorts 파싱 오류] {e}")
@@ -1163,7 +1277,7 @@ class YouTubeMobileCrawler(MobileCrawler):
         return shelf_data
 
 
-def crawl_all(keyword):
+def crawl_all(keyword, google_screenshot_path=None, youtube_screenshot_path=None):
     """구글과 유튜브를 동시에 크롤링"""
     results = {
         'google': [],
@@ -1175,13 +1289,13 @@ def crawl_all(keyword):
     print(f"구글 검색 시작: {keyword}")
     print(f"{'='*50}")
     google_crawler = GoogleMobileCrawler()
-    results['google'] = google_crawler.crawl(keyword)
+    results['google'] = google_crawler.crawl(keyword, screenshot_path=google_screenshot_path)
     
     # 유튜브 크롤링 (일반 15개 + Shorts 2구간x5개)
     print(f"\n{'='*50}")
     print(f"유튜브 검색 시작: {keyword}")
     print(f"{'='*50}")
     youtube_crawler = YouTubeMobileCrawler()
-    results['youtube'] = youtube_crawler.crawl(keyword, max_regular=15, max_shorts_shelves=2, shorts_per_shelf=5)
+    results['youtube'] = youtube_crawler.crawl(keyword, max_regular=15, max_shorts_shelves=2, shorts_per_shelf=5, screenshot_path=youtube_screenshot_path)
     
     return results

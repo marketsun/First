@@ -349,6 +349,12 @@ async function loadResults(searchId, filters = {}) {
         const response = await fetch(`/api/results/${searchId}?${params}`);
         const data = await response.json();
         
+        // 스크린샷 정보 저장 (버튼은 항상 표시)
+        if (typeof currentScreenshots !== 'undefined') {
+            currentScreenshots.google = data.google_screenshot;
+            currentScreenshots.youtube = data.youtube_screenshot;
+        }
+        
         // 구글 결과 렌더링 (테이블 형식)
         if (data.google_results.length > 0) {
             googleResults.innerHTML = `

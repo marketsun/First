@@ -13,6 +13,10 @@ class SearchHistory(db.Model):
     keyword = db.Column(db.String(200), nullable=False)
     search_date = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # 스크린샷 경로 추가
+    google_screenshot = db.Column(db.Text, nullable=True)  # 구글 검색 스크린샷 경로
+    youtube_screenshot = db.Column(db.Text, nullable=True)  # 유튜브 검색 스크린샷 경로
+    
     # 관계 설정
     google_results = db.relationship('GoogleResult', backref='search', lazy=True, cascade='all, delete-orphan')
     youtube_results = db.relationship('YouTubeResult', backref='search', lazy=True, cascade='all, delete-orphan')
@@ -23,7 +27,9 @@ class SearchHistory(db.Model):
             'keyword': self.keyword,
             'search_date': self.search_date.strftime('%Y-%m-%d %H:%M:%S'),
             'google_count': len(self.google_results),
-            'youtube_count': len(self.youtube_results)
+            'youtube_count': len(self.youtube_results),
+            'google_screenshot': self.google_screenshot,
+            'youtube_screenshot': self.youtube_screenshot
         }
 
 

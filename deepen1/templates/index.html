@@ -33,6 +33,14 @@
                 <button id="copy-links-btn" class="copy-links-button" onclick="copyAllLinks()">
                     링크복사
                 </button>
+                
+                <!-- 관련검색어 토글 스위치 -->
+                <div class="related-search-toggle">
+                    <span class="toggle-label">관련검색어</span>
+                    <div class="toggle-switch" id="related-search-toggle" onclick="toggleRelatedSearch()">
+                        <div class="toggle-slider"></div>
+                    </div>
+                </div>
             </div>
             
             <!-- 진행 상태 -->
@@ -76,7 +84,12 @@
             <div class="results-column">
                 <div class="column-header">
                     <h2 class="column-title">🌐 구글</h2>
-                    <span class="result-count"><span id="google-count">0</span>개</span>
+                    <div class="header-actions">
+                        <span class="result-count"><span id="google-count">0</span>개</span>
+                        <button id="google-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('google')">
+                            페이지보기
+                        </button>
+                    </div>
                 </div>
                 <div id="google-results" class="results-list">
                     <div class="result-table">
@@ -95,7 +108,12 @@
             <div class="results-column">
                 <div class="column-header">
                     <h2 class="column-title">🎥 유튜브</h2>
-                    <span class="result-count"><span id="youtube-count">0</span>개</span>
+                    <div class="header-actions">
+                        <span class="result-count"><span id="youtube-count">0</span>개</span>
+                        <button id="youtube-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('youtube')">
+                            페이지보기
+                        </button>
+                    </div>
                 </div>
                 <div id="youtube-results" class="results-list">
                     <div class="result-table">
@@ -143,10 +161,136 @@
         </div>
     </div>
 
+    <!-- 스크린샷 모달 -->
+    <div id="screenshot-modal" class="screenshot-modal">
+        <div class="screenshot-overlay" onclick="closeScreenshot()"></div>
+        <div class="screenshot-content">
+            <div class="phone-bezel">
+                <div class="phone-screen">
+                    <img id="screenshot-image" src="" alt="스크린샷">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
         let currentSearchId = null;
         let currentCrawlId = null;
+        let relatedSearchEnabled = false;
+        let currentScreenshots = {
+            google: null,
+            youtube: null
+        };
+        let currentZoom = 100; // 확대/축소 비율
+
+        // 관련검색어 토글 함수
+        function toggleRelatedSearch() {
+            const toggle = document.getElementById('related-search-toggle');
+            relatedSearchEnabled = !relatedSearchEnabled;
+            
+            if (relatedSearchEnabled) {
+                toggle.classList.add('active');
+                console.log('[토글] 관련검색어 활성화');
+            } else {
+                toggle.classList.remove('active');
+                console.log('[토글] 관련검색어 비활성화');
+            }
+        }
+
+        // 스크린샷 보기
+        function showScreenshot(type) {
+            const modal = document.getElementById('screenshot-modal');
+            const image = document.getElementById('screenshot-image');
+            const phoneBezel = document.querySelector('.phone-bezel');
+            
+            const screenshotUrl = currentScreenshots[type];
+            
+            if (!screenshotUrl) {
+                showAlert('스크린샷이 없습니다.', 'error');
+                return;
+            }
+            
+            // 이미지 로드
+            image.src = screenshotUrl;
+            
+            // 줌 초기화
+            currentZoom = 100;
+            updateZoom();
+            
+            // 위치 클래스 설정
+            modal.classList.remove('google', 'youtube');
+            modal.classList.add(type);  // 'google' 또는 'youtube'
+            
+            // 모달 표시
+            modal.classList.add('show');
+            
+            // 이벤트 리스너 추가 (한 번만)
+            if (!phoneBezel.hasAttribute('data-zoom-listener')) {
+                // Shift + 스크롤로 확대/축소
+                phoneBezel.addEventListener('wheel', handleZoomScroll, { passive: false });
+                
+                // 더블클릭으로 150% 토글
+                image.addEventListener('dblclick', handleDoubleClick);
+                
+                phoneBezel.setAttribute('data-zoom-listener', 'true');
+            }
+        }
+
+        // 스크린샷 모달 닫기
+        function closeScreenshot() {
+            const modal = document.getElementById('screenshot-modal');
+            modal.classList.remove('show');
+        }
+
+
+        // ESC 키로 스크린샷 모달 닫기
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeScreenshot();
+            }
+        });
+
+        // 줌 레벨 업데이트
+        function updateZoom() {
+            const phoneBezel = document.querySelector('.phone-bezel');
+            if (phoneBezel) {
+                phoneBezel.style.transform = `scale(${currentZoom / 100})`;
+            }
+        }
+
+        // Shift + 스크롤로 확대/축소
+        function handleZoomScroll(event) {
+            if (event.shiftKey) {
+                event.preventDefault();
+                
+                const delta = event.deltaY;
+                
+                if (delta < 0) {
+                    // 위로 스크롤 = 확대
+                    if (currentZoom < 200) {
+                        currentZoom += 5;
+                        updateZoom();
+                    }
+                } else {
+                    // 아래로 스크롤 = 축소
+                    if (currentZoom > 50) {
+                        currentZoom -= 5;
+                        updateZoom();
+                    }
+                }
+            }
+        }
+
+        // 더블클릭으로 150% 토글
+        function handleDoubleClick() {
+            if (currentZoom === 100) {
+                currentZoom = 150;
+            } else {
+                currentZoom = 100;
+            }
+            updateZoom();
+        }
 
         async function handleSearch() {
             const keyword = document.getElementById('search-keyword').value.trim();
@@ -321,6 +465,10 @@
                 console.log('[DEBUG] API 응답 데이터:', data);
                 console.log('[DEBUG] 구글 결과 수:', data.google_results?.length);
                 console.log('[DEBUG] 유튜브 결과 수:', data.youtube_results?.length);
+                
+                // 스크린샷 정보 저장 (버튼은 항상 표시)
+                currentScreenshots.google = data.google_screenshot;
+                currentScreenshots.youtube = data.youtube_screenshot;
                 
                 // 구글 결과 렌더링
                 if (data.google_results.length > 0) {

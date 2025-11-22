@@ -78,6 +78,26 @@ def perform_crawling(keyword, crawl_id):
         add_log(f"[DEBUG] crawl_id: {crawl_id}")
         add_log(f"=" * 50)
         
+        # 스크린샷 저장 폴더 생성
+        screenshots_dir = os.path.join(basedir, 'static', 'screenshots')
+        if not os.path.exists(screenshots_dir):
+            os.makedirs(screenshots_dir)
+            add_log(f"[준비] 스크린샷 폴더 생성: {screenshots_dir}")
+        
+        # 스크린샷 파일명 생성 (타임스탬프 포함)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        google_screenshot_filename = f"google_{keyword}_{timestamp}.png"
+        youtube_screenshot_filename = f"youtube_{keyword}_{timestamp}.png"
+        
+        google_screenshot_path = os.path.join(screenshots_dir, google_screenshot_filename)
+        youtube_screenshot_path = os.path.join(screenshots_dir, youtube_screenshot_filename)
+        
+        # 웹 접근용 경로
+        google_screenshot_url = f"/static/screenshots/{google_screenshot_filename}"
+        youtube_screenshot_url = f"/static/screenshots/{youtube_screenshot_filename}"
+        
+        add_log(f"[준비] 스크린샷 경로 설정 완료")
+        
         crawling_status[crawl_id]['progress'] = 10
         add_log(f"[진행] 진행률: 10%")
         
@@ -94,7 +114,7 @@ def perform_crawling(keyword, crawl_id):
         sys.stdout = captured_output = io.StringIO()
         
         try:
-            results = crawl_all(keyword)
+            results = crawl_all(keyword, google_screenshot_path, youtube_screenshot_path)
             
             # 캡처된 출력 가져오기
             output = captured_output.getvalue()
@@ -119,10 +139,20 @@ def perform_crawling(keyword, crawl_id):
         add_log(f"[2/3] 데이터베이스에 저장 중...")
         # 데이터베이스에 저장
         with app.app_context():
-            # 검색 기록 생성
-            search_history = SearchHistory(keyword=keyword)
+            # 검색 기록 생성 (스크린샷 경로 포함)
+            search_history = SearchHistory(
+                keyword=keyword,
+                google_screenshot=google_screenshot_url if os.path.exists(google_screenshot_path) else None,
+                youtube_screenshot=youtube_screenshot_url if os.path.exists(youtube_screenshot_path) else None
+            )
             db.session.add(search_history)
             db.session.flush()  # ID 생성
+            
+            # 스크린샷 저장 여부 로깅
+            if os.path.exists(google_screenshot_path):
+                add_log(f"[성공] 구글 스크린샷 저장: {google_screenshot_url}")
+            if os.path.exists(youtube_screenshot_path):
+                add_log(f"[성공] 유튜브 스크린샷 저장: {youtube_screenshot_url}")
             
             # 구글 결과 저장
             for result in results['google']:
@@ -279,7 +309,9 @@ def api_results(search_id):
         'keyword': search.keyword,
         'search_date': search.search_date.strftime('%Y-%m-%d %H:%M:%S'),
         'google_results': [r.to_dict() for r in google_results],
-        'youtube_results': [r.to_dict() for r in youtube_results]
+        'youtube_results': [r.to_dict() for r in youtube_results],
+        'google_screenshot': search.google_screenshot,
+        'youtube_screenshot': search.youtube_screenshot
     })
 
 
