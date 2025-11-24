@@ -84,11 +84,14 @@
             <div class="results-column">
                 <div class="column-header">
                     <h2 class="column-title">🌐 구글</h2>
-                    <div class="header-actions">
-                        <span class="result-count"><span id="google-count">0</span>개</span>
-                        <button id="google-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('google')">
-                            페이지보기
+                    
+                    <!-- 관련검색어 드롭다운 (토글 ON일 때만 표시) -->
+                    <div class="related-dropdown-container" id="google-dropdown-container" style="display: none;">
+                        <button class="related-dropdown-btn" onclick="toggleDropdown('google')">
+                            <span id="google-current-keyword"></span>
+                            <span class="dropdown-arrow">▼</span>
                         </button>
+                        <div class="dropdown-menu" id="google-dropdown"></div>
                     </div>
                 </div>
                 <div id="google-results" class="results-list">
@@ -98,6 +101,12 @@
                             <div class="result-table-cell type-cell">타입</div>
                             <div class="result-table-cell source-cell">출처</div>
                             <div class="result-table-cell title-cell">제목</div>
+                            <div class="result-table-cell action-cell" style="margin-left: auto;">
+                                <span class="result-count"><span id="google-count">0</span>개</span>
+                                <button id="google-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('google')">
+                                    📸 페이지보기
+                                </button>
+                            </div>
                         </div>
                         <div class="empty-state">검색을 시작하세요</div>
                     </div>
@@ -108,11 +117,14 @@
             <div class="results-column">
                 <div class="column-header">
                     <h2 class="column-title">🎥 유튜브</h2>
-                    <div class="header-actions">
-                        <span class="result-count"><span id="youtube-count">0</span>개</span>
-                        <button id="youtube-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('youtube')">
-                            페이지보기
+                    
+                    <!-- 관련검색어 드롭다운 (토글 ON일 때만 표시) -->
+                    <div class="related-dropdown-container" id="youtube-dropdown-container" style="display: none;">
+                        <button class="related-dropdown-btn" onclick="toggleDropdown('youtube')">
+                            <span id="youtube-current-keyword"></span>
+                            <span class="dropdown-arrow">▼</span>
                         </button>
+                        <div class="dropdown-menu" id="youtube-dropdown"></div>
                     </div>
                 </div>
                 <div id="youtube-results" class="results-list">
@@ -128,6 +140,12 @@
                                 조회수 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
                             </div>
                             <div class="result-table-cell title-cell">제목</div>
+                            <div class="result-table-cell action-cell" style="margin-left: auto;">
+                                <span class="result-count"><span id="youtube-count">0</span>개</span>
+                                <button id="youtube-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('youtube')">
+                                    📸 페이지보기
+                                </button>
+                            </div>
                         </div>
                         <div class="empty-state">검색을 시작하세요</div>
                     </div>
@@ -183,6 +201,14 @@
             youtube: null
         };
         let currentZoom = 100; // 확대/축소 비율
+        
+        // 관련검색어 데이터
+        let currentSearchData = null;  // 전체 검색 데이터
+        let currentKeyword = '';  // 현재 검색 키워드
+        let currentDisplayedResults = {
+            google: { keyword: '', results: [], screenshot: null },
+            youtube: { keyword: '', results: [], screenshot: null }
+        };
 
         // 관련검색어 토글 함수
         function toggleRelatedSearch() {
@@ -291,7 +317,164 @@
             }
             updateZoom();
         }
-
+        
+        // 드롭다운 열기/닫기
+        function toggleDropdown(type) {
+            const dropdown = document.getElementById(`${type}-dropdown`);
+            const btn = dropdown.previousElementSibling;
+            
+            // 다른 드롭다운 닫기
+            const otherType = type === 'google' ? 'youtube' : 'google';
+            const otherDropdown = document.getElementById(`${otherType}-dropdown`);
+            const otherBtn = otherDropdown.previousElementSibling;
+            otherDropdown.classList.remove('show');
+            otherBtn.classList.remove('open');
+            
+            // 현재 드롭다운 토글
+            dropdown.classList.toggle('show');
+            btn.classList.toggle('open');
+        }
+        
+        // 관련검색어 선택
+        async function selectRelated(type, keyword) {
+            // 키워드 정규화
+            keyword = keyword.trim();
+            
+            // 디버깅 로그
+            console.log('=== selectRelated 디버깅 ===');
+            console.log('타입:', type);
+            console.log('선택한 키워드:', keyword);
+            console.log('currentSearchData:', currentSearchData);
+            console.log(`${type}_related_results:`, currentSearchData[`${type}_related_results`]);
+            
+            // 드롭다운 닫기
+            const dropdown = document.getElementById(`${type}-dropdown`);
+            const btn = dropdown.previousElementSibling;
+            dropdown.classList.remove('show');
+            btn.classList.remove('open');
+            
+            // 버튼 텍스트 변경
+            document.getElementById(`${type}-current-keyword`).textContent = keyword;
+            
+            // 활성화 상태 변경
+            const items = dropdown.querySelectorAll('.dropdown-item');
+            items.forEach(item => {
+                item.classList.remove('active');
+                if (item.textContent.trim() === keyword) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // 로딩 표시
+            showAlert(`"${keyword}" 결과 로딩 중...`, 'info');
+            
+            // 결과 표시
+            let results, screenshot;
+            
+            if (keyword === currentKeyword) {
+                // 원본 검색어
+                results = currentSearchData[`${type}_results`];
+                screenshot = currentSearchData[`${type}_screenshot`];
+                console.log('원본 검색어 - results 개수:', results?.length);
+                console.log('원본 검색어 - screenshot:', screenshot);
+            } else {
+                // 관련검색어
+                const relatedData = currentSearchData[`${type}_related_results`]?.[keyword];
+                
+                console.log('relatedData:', relatedData);
+                
+                if (!relatedData) {
+                    console.error('❌ 관련검색어 데이터를 찾을 수 없습니다:', keyword);
+                    console.log('사용 가능한 키워드:', Object.keys(currentSearchData[`${type}_related_results`] || {}));
+                    showAlert('데이터를 불러올 수 없습니다.', 'error');
+                    return;
+                }
+                
+                results = relatedData.results;
+                screenshot = relatedData.screenshot;
+                
+                console.log('관련검색어 - results 개수:', results?.length);
+                console.log('관련검색어 - screenshot:', screenshot);
+            }
+            
+            // 현재 표시 중인 결과 저장
+            currentDisplayedResults[type] = { keyword, results, screenshot };
+            
+            // 화면 업데이트
+            console.log('displayResults 호출 전 - type:', type, 'keyword:', keyword, 'results:', results?.length, 'screenshot:', screenshot);
+            await displayResults(type, keyword, results, screenshot);
+        }
+        
+        // 결과 표시 함수
+        async function displayResults(type, keyword, results, screenshot) {
+            // 스크린샷 업데이트
+            currentScreenshots[type] = screenshot;
+            
+            // 결과 렌더링 (기존 UI 형식 유지)
+            if (type === 'google') {
+                const googleResults = document.getElementById('google-results');
+                
+                if (results && results.length > 0) {
+                    googleResults.innerHTML = `
+                        <div class="result-table">
+                            <div class="result-table-header">
+                                <div class="result-table-cell position-cell">순서</div>
+                                <div class="result-table-cell type-cell">타입</div>
+                                <div class="result-table-cell source-cell">출처</div>
+                                <div class="result-table-cell title-cell">제목</div>
+                                <div class="result-table-cell action-cell" style="margin-left: auto;">
+                                    <span class="result-count"><span id="google-count">${results.length}</span>개</span>
+                                    <button id="google-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('google')">
+                                        📸 페이지보기
+                                    </button>
+                                </div>
+                            </div>
+                            ${results.map(result => {
+                                const typeLabel = result.result_type || '일반';
+                                const typeClass = typeLabel === '이미지' ? 'type-cell image' : 'type-cell';
+                                const source = result.source || result.snippet || extractDomainName(result.url);
+                                
+                                return `
+                                    <div class="result-table-row">
+                                        <div class="result-table-cell position-cell">${result.position}</div>
+                                        <div class="result-table-cell ${typeClass}">${typeLabel}</div>
+                                        <div class="result-table-cell source-cell">${source}</div>
+                                        <div class="result-table-cell title-cell">
+                                            <a href="${result.url}" target="_blank">${result.title}</a>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                } else {
+                    googleResults.innerHTML = `
+                        <div class="result-table">
+                            <div class="result-table-header">
+                                <div class="result-table-cell position-cell">순서</div>
+                                <div class="result-table-cell type-cell">타입</div>
+                                <div class="result-table-cell source-cell">출처</div>
+                                <div class="result-table-cell title-cell">제목</div>
+                                <div class="result-table-cell action-cell" style="margin-left: auto;">
+                                    <span class="result-count"><span id="google-count">0</span>개</span>
+                                    <button id="google-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('google')">
+                                        📸 페이지보기
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">검색 결과가 없습니다.</div></div>
+                        </div>
+                    `;
+                }
+                
+            } else if (type === 'youtube') {
+                // 유튜브 결과 렌더링 (main.js의 renderYoutubeResults 사용)
+                originalYoutubeData = results || [];
+                youtubeSortState = { date: 'desc', views: null }; // 정렬 상태 초기화
+                renderYoutubeResults(originalYoutubeData);
+            }
+        }
+        
         async function handleSearch() {
             const keyword = document.getElementById('search-keyword').value.trim();
             
@@ -324,6 +507,12 @@
                         <div class="result-table-cell type-cell">타입</div>
                         <div class="result-table-cell source-cell">출처</div>
                         <div class="result-table-cell title-cell">제목</div>
+                        <div class="result-table-cell action-cell" style="margin-left: auto;">
+                            <span class="result-count"><span id="google-count">0</span>개</span>
+                            <button id="google-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('google')">
+                                📸 페이지보기
+                            </button>
+                        </div>
                     </div>
                     <div class="loading">
                         <div class="spinner"></div>
@@ -345,6 +534,12 @@
                             조회수 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
                         </div>
                         <div class="result-table-cell title-cell">제목</div>
+                        <div class="result-table-cell action-cell" style="margin-left: auto;">
+                            <span class="result-count"><span id="youtube-count">0</span>개</span>
+                            <button id="youtube-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('youtube')">
+                                📸 페이지보기
+                            </button>
+                        </div>
                     </div>
                     <div class="loading">
                         <div class="spinner"></div>
@@ -354,13 +549,16 @@
             `;
             
             try {
-                // 검색 요청
+                // 검색 요청 (관련검색어 토글 상태 포함)
                 const response = await fetch('/search', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ keyword })
+                    body: JSON.stringify({ 
+                        keyword: keyword,
+                        related_search_enabled: relatedSearchEnabled 
+                    })
                 });
                 
                 const data = await response.json();
@@ -681,50 +879,98 @@
             const originalText = btn.innerHTML;
             
             try {
-                // 현재 표시된 결과에서 링크 추출
-                const googleLinks = [];
-                const youtubeLinks = [];
+                let output = '';
+                let totalCount = 0;
                 
-                // 구글 결과에서 링크 추출
-                const googleRows = document.querySelectorAll('#google-results .result-table-row');
-                googleRows.forEach(row => {
-                    const linkElem = row.querySelector('a[href]');
-                    if (linkElem && linkElem.href) {
-                        googleLinks.push(linkElem.href);
+                // 관련검색어 토글이 활성화된 경우
+                if (currentSearchData && currentSearchData.related_search_enabled) {
+                    // === 구글 ===
+                    output += '=== 구글 ===\n\n';
+                    
+                    // 원본 검색어
+                    output += `[${currentKeyword}]\n`;
+                    currentSearchData.google_results.forEach(r => {
+                        output += r.url + '\n';
+                    });
+                    output += `(${currentSearchData.google_results.length}개)\n\n`;
+                    totalCount += currentSearchData.google_results.length;
+                    
+                    // 관련검색어들
+                    if (currentSearchData.google_related_searches) {
+                        currentSearchData.google_related_searches.forEach(keyword => {
+                            const relatedData = currentSearchData.google_related_results[keyword];
+                            if (relatedData && relatedData.results) {
+                                output += `[${keyword}]\n`;
+                                relatedData.results.forEach(r => {
+                                    output += r.url + '\n';
+                                });
+                                output += `(${relatedData.results.length}개)\n\n`;
+                                totalCount += relatedData.results.length;
+                            }
+                        });
                     }
-                });
-                
-                // 유튜브 결과에서 링크 추출
-                const youtubeRows = document.querySelectorAll('#youtube-results .result-table-row');
-                youtubeRows.forEach(row => {
-                    const linkElem = row.querySelector('a[href]');
-                    if (linkElem && linkElem.href) {
-                        youtubeLinks.push(linkElem.href);
+                    
+                    // === 유튜브 ===
+                    output += '\n=== 유튜브 ===\n\n';
+                    
+                    // 원본 검색어
+                    output += `[${currentKeyword}]\n`;
+                    currentSearchData.youtube_results.forEach(r => {
+                        output += r.url + '\n';
+                    });
+                    output += `(${currentSearchData.youtube_results.length}개)\n\n`;
+                    totalCount += currentSearchData.youtube_results.length;
+                    
+                    // 관련검색어들
+                    if (currentSearchData.youtube_related_searches) {
+                        currentSearchData.youtube_related_searches.forEach(keyword => {
+                            const relatedData = currentSearchData.youtube_related_results[keyword];
+                            if (relatedData && relatedData.results) {
+                                output += `[${keyword}]\n`;
+                                relatedData.results.forEach(r => {
+                                    output += r.url + '\n';
+                                });
+                                output += `(${relatedData.results.length}개)\n\n`;
+                                totalCount += relatedData.results.length;
+                            }
+                        });
                     }
-                });
+                    
+                } else {
+                    // 관련검색어 토글 OFF (기존 방식)
+                    const googleLinks = [];
+                    const youtubeLinks = [];
+                    
+                    // 구글 결과에서 링크 추출
+                    const googleRows = document.querySelectorAll('#google-results .result-table-row');
+                    googleRows.forEach(row => {
+                        const linkElem = row.querySelector('a[href]');
+                        if (linkElem && linkElem.href) {
+                            googleLinks.push(linkElem.href);
+                        }
+                    });
+                    
+                    // 유튜브 결과에서 링크 추출
+                    const youtubeRows = document.querySelectorAll('#youtube-results .result-table-row');
+                    youtubeRows.forEach(row => {
+                        const linkElem = row.querySelector('a[href]');
+                        if (linkElem && linkElem.href) {
+                            youtubeLinks.push(linkElem.href);
+                        }
+                    });
+                    
+                    output = [...googleLinks, ...youtubeLinks].join('\n');
+                    totalCount = googleLinks.length + youtubeLinks.length;
+                }
                 
                 // 링크가 없으면 알림
-                if (googleLinks.length === 0 && youtubeLinks.length === 0) {
+                if (totalCount === 0) {
                     showAlert('복사할 링크가 없습니다. 먼저 검색을 실행하세요.', 'error');
                     return;
                 }
                 
-                // 텍스트 포맷 생성
-                let copyText = '';
-                
-                if (googleLinks.length > 0) {
-                    copyText += `[구글 검색 결과] (${googleLinks.length}개)\n`;
-                    copyText += googleLinks.join('\n');
-                    copyText += '\n\n';
-                }
-                
-                if (youtubeLinks.length > 0) {
-                    copyText += `[유튜브 검색 결과] (${youtubeLinks.length}개)\n`;
-                    copyText += youtubeLinks.join('\n');
-                }
-                
                 // 클립보드에 복사
-                await navigator.clipboard.writeText(copyText);
+                await navigator.clipboard.writeText(output);
                 
                 // 버튼 상태 변경
                 btn.innerHTML = '✅ 복사됨!';
@@ -737,8 +983,7 @@
                 }, 2000);
                 
                 // 성공 알림
-                const totalLinks = googleLinks.length + youtubeLinks.length;
-                showAlert(`총 ${totalLinks}개의 링크를 복사했습니다! (구글 ${googleLinks.length}개, 유튜브 ${youtubeLinks.length}개)`, 'success');
+                showAlert(`총 ${totalCount}개의 링크를 복사했습니다!`, 'success');
                 
             } catch (error) {
                 console.error('링크 복사 오류:', error);

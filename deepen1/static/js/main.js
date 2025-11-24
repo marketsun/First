@@ -189,6 +189,12 @@ function renderYoutubeResults(data) {
                         조회수 ${getViewsSortIcon()}
                     </div>
                     <div class="result-table-cell title-cell">제목</div>
+                    <div class="result-table-cell action-cell" style="margin-left: auto;">
+                        <span class="result-count"><span id="youtube-count">${data.length}</span>개</span>
+                        <button id="youtube-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('youtube')">
+                            📸 페이지보기
+                        </button>
+                    </div>
                 </div>
                 ${data.map(result => {
                     const typeLabel = result.is_short 
@@ -227,7 +233,6 @@ function renderYoutubeResults(data) {
                 }).join('')}
             </div>
         `;
-        youtubeCount.textContent = data.length;
     } else {
         youtubeResults.innerHTML = `
             <div class="result-table">
@@ -242,11 +247,16 @@ function renderYoutubeResults(data) {
                         조회수 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
                     </div>
                     <div class="result-table-cell title-cell">제목</div>
+                    <div class="result-table-cell action-cell" style="margin-left: auto;">
+                        <span class="result-count"><span id="youtube-count">0</span>개</span>
+                        <button id="youtube-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('youtube')">
+                            📸 페이지보기
+                        </button>
+                    </div>
                 </div>
                 <div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">검색 결과가 없습니다.</div></div>
             </div>
         `;
-        youtubeCount.textContent = '0';
     }
 }
 
@@ -349,10 +359,23 @@ async function loadResults(searchId, filters = {}) {
         const response = await fetch(`/api/results/${searchId}?${params}`);
         const data = await response.json();
         
+        // 전역 변수에 데이터 저장
+        if (typeof currentSearchData !== 'undefined') {
+            currentSearchData = data;
+            currentKeyword = data.keyword;
+        }
+        
         // 스크린샷 정보 저장 (버튼은 항상 표시)
         if (typeof currentScreenshots !== 'undefined') {
             currentScreenshots.google = data.google_screenshot;
             currentScreenshots.youtube = data.youtube_screenshot;
+        }
+        
+        // 관련검색어 UI 업데이트
+        if (typeof data.related_search_enabled !== 'undefined' && data.related_search_enabled) {
+            showRelatedSearchUI(data);
+        } else {
+            hideRelatedSearchUI();
         }
         
         // 구글 결과 렌더링 (테이블 형식)
@@ -364,6 +387,12 @@ async function loadResults(searchId, filters = {}) {
                         <div class="result-table-cell type-cell">타입</div>
                         <div class="result-table-cell source-cell">출처</div>
                         <div class="result-table-cell title-cell">제목</div>
+                        <div class="result-table-cell action-cell" style="margin-left: auto;">
+                            <span class="result-count"><span id="google-count">${data.google_results.length}</span>개</span>
+                            <button id="google-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('google')">
+                                📸 페이지보기
+                            </button>
+                        </div>
                     </div>
                     ${data.google_results.map(result => {
                         const typeLabel = result.result_type || '일반';
@@ -380,10 +409,9 @@ async function loadResults(searchId, filters = {}) {
                                 </div>
                             </div>
                         `;
-                    }).join('')}
-                </div>
-            `;
-            googleCount.textContent = data.google_results.length;
+                }).join('')}
+            </div>
+        `;
         } else {
             googleResults.innerHTML = `
                 <div class="result-table">
@@ -392,11 +420,16 @@ async function loadResults(searchId, filters = {}) {
                         <div class="result-table-cell type-cell">타입</div>
                         <div class="result-table-cell source-cell">출처</div>
                         <div class="result-table-cell title-cell">제목</div>
+                        <div class="result-table-cell action-cell" style="margin-left: auto;">
+                            <span class="result-count"><span id="google-count">0</span>개</span>
+                            <button id="google-screenshot-btn" class="screenshot-btn" onclick="showScreenshot('google')">
+                                📸 페이지보기
+                            </button>
+                        </div>
                     </div>
                     <div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-text">검색 결과가 없습니다.</div></div>
                 </div>
             `;
-            googleCount.textContent = '0';
         }
         
         // 유튜브 결과 저장 및 렌더링
@@ -496,6 +529,82 @@ function resetFilters(searchId) {
     document.getElementById('filter-sort').value = '';
     
     loadResults(searchId);
+}
+
+// 관련검색어 UI 표시
+function showRelatedSearchUI(data) {
+    // 구글 드롭다운 생성
+    const googleDropdownContainer = document.getElementById('google-dropdown-container');
+    const googleDropdown = document.getElementById('google-dropdown');
+    const googleCurrentKeyword = document.getElementById('google-current-keyword');
+    
+    if (googleDropdownContainer && googleDropdown && googleCurrentKeyword) {
+        // 현재 검색어 표시
+        googleCurrentKeyword.textContent = data.keyword;
+        
+        // 드롭다운 메뉴 생성
+        let googleHtml = `
+            <div class="dropdown-item active" onclick="selectRelated('google', '${data.keyword}')">
+                ${data.keyword}
+            </div>
+        `;
+        
+        if (data.google_related_searches) {
+            data.google_related_searches.forEach(keyword => {
+                googleHtml += `
+                    <div class="dropdown-item" onclick="selectRelated('google', '${keyword}')">
+                        ${keyword}
+                    </div>
+                `;
+            });
+        }
+        
+        googleDropdown.innerHTML = googleHtml;
+        googleDropdownContainer.style.display = 'flex';
+    }
+    
+    // 유튜브 드롭다운 생성
+    const youtubeDropdownContainer = document.getElementById('youtube-dropdown-container');
+    const youtubeDropdown = document.getElementById('youtube-dropdown');
+    const youtubeCurrentKeyword = document.getElementById('youtube-current-keyword');
+    
+    if (youtubeDropdownContainer && youtubeDropdown && youtubeCurrentKeyword) {
+        // 현재 검색어 표시
+        youtubeCurrentKeyword.textContent = data.keyword;
+        
+        // 드롭다운 메뉴 생성
+        let youtubeHtml = `
+            <div class="dropdown-item active" onclick="selectRelated('youtube', '${data.keyword}')">
+                ${data.keyword}
+            </div>
+        `;
+        
+        if (data.youtube_related_searches) {
+            data.youtube_related_searches.forEach(keyword => {
+                youtubeHtml += `
+                    <div class="dropdown-item" onclick="selectRelated('youtube', '${keyword}')">
+                        ${keyword}
+                    </div>
+                `;
+            });
+        }
+        
+        youtubeDropdown.innerHTML = youtubeHtml;
+        youtubeDropdownContainer.style.display = 'flex';
+    }
+}
+
+// 관련검색어 UI 숨기기
+function hideRelatedSearchUI() {
+    const googleDropdownContainer = document.getElementById('google-dropdown-container');
+    const youtubeDropdownContainer = document.getElementById('youtube-dropdown-container');
+    
+    if (googleDropdownContainer) {
+        googleDropdownContainer.style.display = 'none';
+    }
+    if (youtubeDropdownContainer) {
+        youtubeDropdownContainer.style.display = 'none';
+    }
 }
 
 

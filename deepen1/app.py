@@ -1,10 +1,11 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
-from models import db, SearchHistory, GoogleResult, YouTubeResult
-from crawler import crawl_all
+from models import db, SearchHistory, GoogleResult, YouTubeResult, RelatedSearchResult
+from crawler import crawl_all, get_google_suggestions, get_youtube_suggestions, GoogleMobileCrawler, YouTubeMobileCrawler
 from datetime import datetime
 import os
 import sys
 import threading
+import json
 
 # Windows 콘솔 UTF-8 인코딩 설정 (이모지 및 특수문자 지원)
 if sys.platform == 'win32':
@@ -39,6 +40,7 @@ def search():
     """검색 실행"""
     data = request.get_json()
     keyword = data.get('keyword', '').strip()
+    related_search_enabled = data.get('related_search_enabled', False)  # 관련검색어 토글 상태
     
     if not keyword:
         return jsonify({'error': '키워드를 입력해주세요.'}), 400
@@ -50,7 +52,7 @@ def search():
         crawling_status[crawl_id] = {'status': 'running', 'progress': 0}
         
         # 백그라운드에서 크롤링 실행
-        thread = threading.Thread(target=perform_crawling, args=(keyword, crawl_id))
+        thread = threading.Thread(target=perform_crawling, args=(keyword, crawl_id, related_search_enabled))
         thread.start()
         
         return jsonify({
@@ -62,7 +64,7 @@ def search():
         return jsonify({'error': f'오류 발생: {str(e)}'}), 500
 
 
-def perform_crawling(keyword, crawl_id):
+def perform_crawling(keyword, crawl_id, related_search_enabled=False):
     """실제 크롤링 수행 (백그라운드)"""
     # 로그 초기화
     crawling_logs[crawl_id] = []
@@ -143,10 +145,12 @@ def perform_crawling(keyword, crawl_id):
             search_history = SearchHistory(
                 keyword=keyword,
                 google_screenshot=google_screenshot_url if os.path.exists(google_screenshot_path) else None,
-                youtube_screenshot=youtube_screenshot_url if os.path.exists(youtube_screenshot_path) else None
+                youtube_screenshot=youtube_screenshot_url if os.path.exists(youtube_screenshot_path) else None,
+                related_search_enabled=related_search_enabled
             )
             db.session.add(search_history)
             db.session.flush()  # ID 생성
+            search_id = search_history.id
             
             # 스크린샷 저장 여부 로깅
             if os.path.exists(google_screenshot_path):
@@ -194,12 +198,103 @@ def perform_crawling(keyword, crawl_id):
                 )
                 db.session.add(youtube_result)
             
+            # 관련검색어 크롤링 (토글이 활성화된 경우)
+            if related_search_enabled:
+                add_log(f"")
+                add_log(f"[관련검색어] 관련검색어 크롤링 시작...")
+                
+                # 구글 관련검색어 가져오기
+                google_related = get_google_suggestions(keyword)
+                add_log(f"[관련검색어] 구글 관련검색어 {len(google_related)}개 발견")
+                
+                # 유튜브 관련검색어 가져오기
+                youtube_related = get_youtube_suggestions(keyword)
+                add_log(f"[관련검색어] 유튜브 관련검색어 {len(youtube_related)}개 발견")
+                
+                # DB에 관련검색어 목록 저장
+                search_history.google_related_searches = json.dumps(google_related, ensure_ascii=False)
+                search_history.youtube_related_searches = json.dumps(youtube_related, ensure_ascii=False)
+                
+                # 구글 관련검색어 크롤링
+                google_crawler = GoogleMobileCrawler()
+                for idx, related_keyword in enumerate(google_related, 1):
+                    try:
+                        add_log(f"[관련검색어] 구글 - {idx}/{len(google_related)}: '{related_keyword}' 크롤링 중...")
+                        
+                        # 스크린샷 경로 생성
+                        related_screenshot_filename = f"google_related_{search_id}_{idx}_{timestamp}.png"
+                        related_screenshot_path = os.path.join(screenshots_dir, related_screenshot_filename)
+                        related_screenshot_url = f"/static/screenshots/{related_screenshot_filename}"
+                        
+                        # 크롤링
+                        related_results = google_crawler.crawl(related_keyword, related_screenshot_path)
+                        
+                        # DB 저장
+                        related_record = RelatedSearchResult(
+                            parent_search_id=search_id,
+                            keyword=related_keyword,
+                            source='google',
+                            results=json.dumps([r for r in related_results], ensure_ascii=False),
+                            screenshot_path=related_screenshot_url if os.path.exists(related_screenshot_path) else None
+                        )
+                        db.session.add(related_record)
+                        
+                        add_log(f"[관련검색어] 구글 - '{related_keyword}': {len(related_results)}개 결과")
+                    except Exception as e:
+                        add_log(f"[경고] 구글 관련검색어 '{related_keyword}' 크롤링 실패: {e}")
+                
+                google_crawler.close_driver()
+                
+                # 유튜브 관련검색어 크롤링
+                youtube_crawler = YouTubeMobileCrawler()
+                for idx, related_keyword in enumerate(youtube_related, 1):
+                    try:
+                        add_log(f"[관련검색어] 유튜브 - {idx}/{len(youtube_related)}: '{related_keyword}' 크롤링 중...")
+                        
+                        # 스크린샷 경로 생성
+                        related_screenshot_filename = f"youtube_related_{search_id}_{idx}_{timestamp}.png"
+                        related_screenshot_path = os.path.join(screenshots_dir, related_screenshot_filename)
+                        related_screenshot_url = f"/static/screenshots/{related_screenshot_filename}"
+                        
+                        # 크롤링
+                        related_results = youtube_crawler.crawl(related_keyword, screenshot_path=related_screenshot_path)
+                        
+                        # datetime 객체를 문자열로 변환
+                        serializable_results = []
+                        for r in related_results:
+                            result_copy = r.copy()
+                            for key, value in result_copy.items():
+                                if isinstance(value, datetime):
+                                    result_copy[key] = value.isoformat()
+                            serializable_results.append(result_copy)
+                        
+                        # DB 저장
+                        related_record = RelatedSearchResult(
+                            parent_search_id=search_id,
+                            keyword=related_keyword,
+                            source='youtube',
+                            results=json.dumps(serializable_results, ensure_ascii=False),
+                            screenshot_path=related_screenshot_url if os.path.exists(related_screenshot_path) else None
+                        )
+                        db.session.add(related_record)
+                        
+                        add_log(f"[관련검색어] 유튜브 - '{related_keyword}': {len(related_results)}개 결과")
+                    except Exception as e:
+                        add_log(f"[경고] 유튜브 관련검색어 '{related_keyword}' 크롤링 실패: {e}")
+                
+                youtube_crawler.close_driver()
+                
+                add_log(f"[완료] 관련검색어 크롤링 완료!")
+            
             db.session.commit()
             
             add_log(f"[완료] 데이터베이스 저장 완료!")
             add_log(f"  - 검색 ID: {search_history.id}")
             add_log(f"  - 구글 결과: {len(results['google'])}개")
             add_log(f"  - 유튜브 결과: {len(results['youtube'])}개")
+            if related_search_enabled:
+                add_log(f"  - 구글 관련검색어: {len(google_related)}개")
+                add_log(f"  - 유튜브 관련검색어: {len(youtube_related)}개")
             
             crawling_status[crawl_id]['progress'] = 80
             add_log(f"[진행] 진행률: 80%")
@@ -305,14 +400,44 @@ def api_results(search_id):
     elif sort_by == 'date_desc':
         youtube_results = sorted(youtube_results, key=lambda x: x.upload_timestamp or datetime.min, reverse=True)
     
-    return jsonify({
+    response = {
         'keyword': search.keyword,
         'search_date': search.search_date.strftime('%Y-%m-%d %H:%M:%S'),
         'google_results': [r.to_dict() for r in google_results],
         'youtube_results': [r.to_dict() for r in youtube_results],
         'google_screenshot': search.google_screenshot,
-        'youtube_screenshot': search.youtube_screenshot
-    })
+        'youtube_screenshot': search.youtube_screenshot,
+        'related_search_enabled': search.related_search_enabled
+    }
+    
+    # 관련검색어 토글이 활성화된 경우
+    if search.related_search_enabled:
+        # 관련검색어 목록
+        response['google_related_searches'] = json.loads(search.google_related_searches or '[]')
+        response['youtube_related_searches'] = json.loads(search.youtube_related_searches or '[]')
+        
+        # 각 관련검색어별 결과
+        google_related_results = {}
+        youtube_related_results = {}
+        
+        related_records = RelatedSearchResult.query.filter_by(parent_search_id=search_id).all()
+        
+        for record in related_records:
+            if record.source == 'google':
+                google_related_results[record.keyword] = {
+                    'results': json.loads(record.results),
+                    'screenshot': record.screenshot_path
+                }
+            else:  # youtube
+                youtube_related_results[record.keyword] = {
+                    'results': json.loads(record.results),
+                    'screenshot': record.screenshot_path
+                }
+        
+        response['google_related_results'] = google_related_results
+        response['youtube_related_results'] = youtube_related_results
+    
+    return jsonify(response)
 
 
 @app.route('/history')

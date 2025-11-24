@@ -17,9 +17,15 @@ class SearchHistory(db.Model):
     google_screenshot = db.Column(db.Text, nullable=True)  # 구글 검색 스크린샷 경로
     youtube_screenshot = db.Column(db.Text, nullable=True)  # 유튜브 검색 스크린샷 경로
     
+    # 관련검색어 기능
+    related_search_enabled = db.Column(db.Boolean, default=False)  # 관련검색어 토글 상태
+    google_related_searches = db.Column(db.Text, nullable=True)  # JSON: 구글 관련검색어 목록
+    youtube_related_searches = db.Column(db.Text, nullable=True)  # JSON: 유튜브 관련검색어 목록
+    
     # 관계 설정
     google_results = db.relationship('GoogleResult', backref='search', lazy=True, cascade='all, delete-orphan')
     youtube_results = db.relationship('YouTubeResult', backref='search', lazy=True, cascade='all, delete-orphan')
+    related_results = db.relationship('RelatedSearchResult', backref='search', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
         return {
@@ -106,6 +112,29 @@ class YouTubeResult(db.Model):
             'is_short': self.is_short,
             'short_shelf_index': self.short_shelf_index,
             'position_in_shelf': self.position_in_shelf
+        }
+
+
+class RelatedSearchResult(db.Model):
+    """관련검색어별 검색 결과 모델"""
+    __tablename__ = 'related_search_results'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    parent_search_id = db.Column(db.Integer, db.ForeignKey('search_history.id'), nullable=False)
+    keyword = db.Column(db.String(200), nullable=False)  # 관련검색어
+    source = db.Column(db.String(50), nullable=False)  # 'google' 또는 'youtube'
+    results = db.Column(db.Text, nullable=False)  # JSON: 검색 결과 리스트
+    screenshot_path = db.Column(db.Text, nullable=True)  # 스크린샷 경로
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'keyword': self.keyword,
+            'source': self.source,
+            'results': json.loads(self.results) if self.results else [],
+            'screenshot_path': self.screenshot_path,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S')
         }
 
 

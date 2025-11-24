@@ -248,6 +248,10 @@ class GoogleMobileCrawler(MobileCrawler):
                     if '/url?q=' in url:
                         # /url?q= 또는 google.com/url?q= 모두 처리
                         url = url.split('/url?q=')[1].split('&')[0]
+                    elif '/aclk?' in url:
+                        # 구글 광고 리다이렉트: adurl= 파라미터에서 실제 목적지 추출
+                        if 'adurl=' in url:
+                            url = url.split('adurl=')[1].split('&')[0]
                     
                     # URL 디코딩
                     from urllib.parse import unquote
@@ -545,6 +549,7 @@ class GoogleMobileCrawler(MobileCrawler):
                 
                 print(f"  → 총 {len(image_links)}개 이미지 링크 발견")
                 
+                prev_url = None  # 연속 중복 체크용 변수 초기화
                 img_count = 0
                 for link in image_links:
                     try:
@@ -1306,6 +1311,66 @@ class YouTubeMobileCrawler(MobileCrawler):
                 continue
         
         return shelf_data
+
+
+def get_google_suggestions(keyword):
+    """구글 자동완성 검색어 가져오기"""
+    import requests
+    
+    url = "http://suggestqueries.google.com/complete/search"
+    params = {
+        "q": keyword,
+        "client": "chrome",
+        "hl": "ko"
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=5)
+        suggestions = response.json()[1]  # 두 번째 요소가 검색어 리스트
+        return suggestions[:10]  # 상위 10개
+    except Exception as e:
+        print(f"[구글 자동완성 오류] {e}")
+        return []
+
+
+def get_youtube_suggestions(keyword):
+    """유튜브 자동완성 검색어 가져오기"""
+    import requests
+    import json
+    
+    url = "http://suggestqueries.google.com/complete/search"
+    params = {
+        "q": keyword,
+        "client": "youtube",
+        "ds": "yt",
+        "hl": "ko"
+    }
+    
+    try:
+        print(f"[DEBUG] 유튜브 자동완성 요청: {keyword}")
+        response = requests.get(url, params=params, timeout=5)
+        print(f"[DEBUG] 응답 상태: {response.status_code}")
+        print(f"[DEBUG] 응답 내용 (처음 200자): {response.text[:200]}")
+        
+        # JSONP 형식 처리: window.google.ac.h(...) 제거
+        text = response.text
+        text = text.replace('window.google.ac.h(', '').rstrip(')')
+        
+        # JSON 파싱
+        data = json.loads(text)
+        print(f"[DEBUG] 파싱된 데이터 구조: {type(data)}, 길이: {len(data)}")
+        
+        # 중첩 배열에서 검색어만 추출: [["검색어", 0, [512]], ...] -> ["검색어", ...]
+        suggestions = [item[0] for item in data[1] if isinstance(item, list) and len(item) > 0]
+        print(f"[DEBUG] 추출된 검색어 개수: {len(suggestions)}")
+        print(f"[DEBUG] 검색어 목록: {suggestions}")
+        
+        return suggestions[:10]
+    except Exception as e:
+        print(f"[유튜브 자동완성 오류] {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 
 def crawl_all(keyword, google_screenshot_path=None, youtube_screenshot_path=None):
