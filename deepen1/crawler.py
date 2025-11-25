@@ -128,12 +128,13 @@ class GoogleMobileCrawler(MobileCrawler):
                     
                     print(f"  → 전체 높이: {total_height}px, 뷰포트: {viewport_height}px")
                     
-                    # 3단계: 조금씩 스크롤하면서 이미지 로드
-                    scroll_step = 350  # 350px씩 작게 스크롤
+                    # 3단계: 스크롤하면서 이미지 로드 (최대 10회)
+                    max_scroll_count = 10  # 최대 10회 스크롤
+                    scroll_step = total_height // max_scroll_count  # 전체 높이를 10등분
                     current_position = 0
                     scroll_count = 0
                     
-                    while current_position < total_height:
+                    while current_position < total_height and scroll_count < max_scroll_count:
                         current_position += scroll_step
                         self.driver.execute_script(f"window.scrollTo(0, {current_position});")
                         scroll_count += 1

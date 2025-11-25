@@ -241,9 +241,9 @@ def perform_crawling(keyword, crawl_id, related_search_enabled=False):
                         add_log(f"[경고] 구글 관련검색어 '{keyword}' 크롤링 실패: {e}")
                         return None
                 
-                add_log(f"[관련검색어] 구글 관련검색어 병렬 크롤링 시작 (최대 5개 동시)...")
+                add_log(f"[관련검색어] 구글 관련검색어 병렬 크롤링 시작 (최대 10개 동시)...")
                 
-                with ThreadPoolExecutor(max_workers=5) as executor:
+                with ThreadPoolExecutor(max_workers=10) as executor:
                     futures = {
                         executor.submit(crawl_google_related, kw, idx): (kw, idx) 
                         for idx, kw in enumerate(google_related, 1)
@@ -300,9 +300,9 @@ def perform_crawling(keyword, crawl_id, related_search_enabled=False):
                         add_log(f"[경고] 유튜브 관련검색어 '{keyword}' 크롤링 실패: {e}")
                         return None
                 
-                add_log(f"[관련검색어] 유튜브 관련검색어 병렬 크롤링 시작 (최대 5개 동시)...")
+                add_log(f"[관련검색어] 유튜브 관련검색어 병렬 크롤링 시작 (최대 10개 동시)...")
                 
-                with ThreadPoolExecutor(max_workers=5) as executor:
+                with ThreadPoolExecutor(max_workers=10) as executor:
                     futures = {
                         executor.submit(crawl_youtube_related, kw, idx): (kw, idx) 
                         for idx, kw in enumerate(youtube_related, 1)
