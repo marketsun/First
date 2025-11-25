@@ -6,6 +6,7 @@ import os
 import sys
 import threading
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Windows 콘솔 UTF-8 인코딩 설정 (이모지 및 특수문자 지원)
 if sys.platform == 'win32':
@@ -215,74 +216,114 @@ def perform_crawling(keyword, crawl_id, related_search_enabled=False):
                 search_history.google_related_searches = json.dumps(google_related, ensure_ascii=False)
                 search_history.youtube_related_searches = json.dumps(youtube_related, ensure_ascii=False)
                 
-                # 구글 관련검색어 크롤링
-                google_crawler = GoogleMobileCrawler()
-                for idx, related_keyword in enumerate(google_related, 1):
+                # 구글 관련검색어 병렬 크롤링
+                def crawl_google_related(keyword, idx):
+                    """구글 관련검색어 크롤링 (병렬 처리용)"""
                     try:
-                        add_log(f"[관련검색어] 구글 - {idx}/{len(google_related)}: '{related_keyword}' 크롤링 중...")
+                        crawler = GoogleMobileCrawler()
                         
                         # 스크린샷 경로 생성
-                        related_screenshot_filename = f"google_related_{search_id}_{idx}_{timestamp}.png"
-                        related_screenshot_path = os.path.join(screenshots_dir, related_screenshot_filename)
-                        related_screenshot_url = f"/static/screenshots/{related_screenshot_filename}"
+                        screenshot_filename = f"google_related_{search_id}_{idx}_{timestamp}.png"
+                        screenshot_path = os.path.join(screenshots_dir, screenshot_filename)
+                        screenshot_url = f"/static/screenshots/{screenshot_filename}"
                         
                         # 크롤링
-                        related_results = google_crawler.crawl(related_keyword, related_screenshot_path)
+                        results = crawler.crawl(keyword, screenshot_path)
                         
-                        # DB 저장
-                        related_record = RelatedSearchResult(
-                            parent_search_id=search_id,
-                            keyword=related_keyword,
-                            source='google',
-                            results=json.dumps([r for r in related_results], ensure_ascii=False),
-                            screenshot_path=related_screenshot_url if os.path.exists(related_screenshot_path) else None
-                        )
-                        db.session.add(related_record)
+                        crawler.close_driver()
                         
-                        add_log(f"[관련검색어] 구글 - '{related_keyword}': {len(related_results)}개 결과")
+                        return {
+                            'keyword': keyword,
+                            'results': results,
+                            'screenshot_url': screenshot_url if os.path.exists(screenshot_path) else None
+                        }
                     except Exception as e:
-                        add_log(f"[경고] 구글 관련검색어 '{related_keyword}' 크롤링 실패: {e}")
+                        add_log(f"[경고] 구글 관련검색어 '{keyword}' 크롤링 실패: {e}")
+                        return None
                 
-                google_crawler.close_driver()
+                add_log(f"[관련검색어] 구글 관련검색어 병렬 크롤링 시작 (최대 5개 동시)...")
                 
-                # 유튜브 관련검색어 크롤링
-                youtube_crawler = YouTubeMobileCrawler()
-                for idx, related_keyword in enumerate(youtube_related, 1):
+                with ThreadPoolExecutor(max_workers=5) as executor:
+                    futures = {
+                        executor.submit(crawl_google_related, kw, idx): (kw, idx) 
+                        for idx, kw in enumerate(google_related, 1)
+                    }
+                    
+                    for future in as_completed(futures):
+                        keyword, idx = futures[future]
+                        add_log(f"[관련검색어] 구글 - {idx}/{len(google_related)}: '{keyword}' 크롤링 중...")
+                        
+                        result = future.result()
+                        if result:
+                            # DB 저장
+                            related_record = RelatedSearchResult(
+                                parent_search_id=search_id,
+                                keyword=result['keyword'],
+                                source='google',
+                                results=json.dumps([r for r in result['results']], ensure_ascii=False),
+                                screenshot_path=result['screenshot_url']
+                            )
+                            db.session.add(related_record)
+                            add_log(f"[관련검색어] 구글 - '{result['keyword']}': {len(result['results'])}개 결과")
+                
+                # 유튜브 관련검색어 병렬 크롤링
+                def crawl_youtube_related(keyword, idx):
+                    """유튜브 관련검색어 크롤링 (병렬 처리용)"""
                     try:
-                        add_log(f"[관련검색어] 유튜브 - {idx}/{len(youtube_related)}: '{related_keyword}' 크롤링 중...")
+                        crawler = YouTubeMobileCrawler()
                         
                         # 스크린샷 경로 생성
-                        related_screenshot_filename = f"youtube_related_{search_id}_{idx}_{timestamp}.png"
-                        related_screenshot_path = os.path.join(screenshots_dir, related_screenshot_filename)
-                        related_screenshot_url = f"/static/screenshots/{related_screenshot_filename}"
+                        screenshot_filename = f"youtube_related_{search_id}_{idx}_{timestamp}.png"
+                        screenshot_path = os.path.join(screenshots_dir, screenshot_filename)
+                        screenshot_url = f"/static/screenshots/{screenshot_filename}"
                         
                         # 크롤링
-                        related_results = youtube_crawler.crawl(related_keyword, screenshot_path=related_screenshot_path)
+                        results = crawler.crawl(keyword, screenshot_path=screenshot_path)
                         
                         # datetime 객체를 문자열로 변환
                         serializable_results = []
-                        for r in related_results:
+                        for r in results:
                             result_copy = r.copy()
                             for key, value in result_copy.items():
                                 if isinstance(value, datetime):
                                     result_copy[key] = value.isoformat()
                             serializable_results.append(result_copy)
                         
-                        # DB 저장
-                        related_record = RelatedSearchResult(
-                            parent_search_id=search_id,
-                            keyword=related_keyword,
-                            source='youtube',
-                            results=json.dumps(serializable_results, ensure_ascii=False),
-                            screenshot_path=related_screenshot_url if os.path.exists(related_screenshot_path) else None
-                        )
-                        db.session.add(related_record)
+                        crawler.close_driver()
                         
-                        add_log(f"[관련검색어] 유튜브 - '{related_keyword}': {len(related_results)}개 결과")
+                        return {
+                            'keyword': keyword,
+                            'results': serializable_results,
+                            'screenshot_url': screenshot_url if os.path.exists(screenshot_path) else None
+                        }
                     except Exception as e:
-                        add_log(f"[경고] 유튜브 관련검색어 '{related_keyword}' 크롤링 실패: {e}")
+                        add_log(f"[경고] 유튜브 관련검색어 '{keyword}' 크롤링 실패: {e}")
+                        return None
                 
-                youtube_crawler.close_driver()
+                add_log(f"[관련검색어] 유튜브 관련검색어 병렬 크롤링 시작 (최대 5개 동시)...")
+                
+                with ThreadPoolExecutor(max_workers=5) as executor:
+                    futures = {
+                        executor.submit(crawl_youtube_related, kw, idx): (kw, idx) 
+                        for idx, kw in enumerate(youtube_related, 1)
+                    }
+                    
+                    for future in as_completed(futures):
+                        keyword, idx = futures[future]
+                        add_log(f"[관련검색어] 유튜브 - {idx}/{len(youtube_related)}: '{keyword}' 크롤링 중...")
+                        
+                        result = future.result()
+                        if result:
+                            # DB 저장
+                            related_record = RelatedSearchResult(
+                                parent_search_id=search_id,
+                                keyword=result['keyword'],
+                                source='youtube',
+                                results=json.dumps(result['results'], ensure_ascii=False),
+                                screenshot_path=result['screenshot_url']
+                            )
+                            db.session.add(related_record)
+                            add_log(f"[관련검색어] 유튜브 - '{result['keyword']}': {len(result['results'])}개 결과")
                 
                 add_log(f"[완료] 관련검색어 크롤링 완료!")
             

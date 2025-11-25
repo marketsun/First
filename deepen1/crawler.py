@@ -143,13 +143,20 @@ class GoogleMobileCrawler(MobileCrawler):
                         if current_position >= total_height:
                             break
                     
-                    # 4단계: 마지막 대기 (모든 이미지 로드 완료)
+                    # 4단계: 마지막 대기 (조건부: 이미지 로드 확인)
                     print("  → 이미지 로드 대기 중...")
-                    time.sleep(2)
+                    try:
+                        # 이미지가 실제로 로드되었는지 확인 (최대 1.5초)
+                        WebDriverWait(self.driver, 1.5).until(
+                            lambda d: len([img for img in d.find_elements(By.TAG_NAME, "img") 
+                                          if img.get_attribute('src') and 'http' in img.get_attribute('src')]) > 3
+                        )
+                    except:
+                        pass  # 타임아웃 시 계속 진행
                     
                     # 5단계: 다시 최상단으로 이동
                     self.driver.execute_script("window.scrollTo(0, 0);")
-                    time.sleep(1)
+                    time.sleep(0.5)  # 1초 → 0.5초로 단축
                     
                     # 6단계: 전체 페이지 크기 가져오기
                     metrics = self.driver.execute_cdp_cmd('Page.getLayoutMetrics', {})
@@ -827,18 +834,21 @@ class YouTubeMobileCrawler(MobileCrawler):
             except Exception as e:
                 print(f"[경고] 페이지 로딩 대기 중 오류: {e}")
             
-            # 이미지 로드 대기 (추가)
+            # 이미지 로드 대기 (최적화: 조건부 대기)
             print("[유튜브 크롤링] 썸네일 이미지 로딩 대기 중...")
             try:
-                # 이미지가 로드될 때까지 대기
-                WebDriverWait(self.driver, 10).until(
+                # 이미지가 로드될 때까지만 대기 (최대 5초)
+                WebDriverWait(self.driver, 5).until(
                     EC.presence_of_element_located((By.TAG_NAME, "img"))
                 )
-                # 추가 대기 시간 (이미지가 실제로 로드되도록)
-                time.sleep(3)
+                # 이미지 src 속성이 실제로 로드될 때까지 대기
+                WebDriverWait(self.driver, 3).until(
+                    lambda d: any(img.get_attribute('src') and 'http' in img.get_attribute('src') 
+                                  for img in d.find_elements(By.TAG_NAME, "img"))
+                )
                 print("[유튜브 크롤링] 이미지 로드 완료")
             except Exception as e:
-                print(f"[경고] 이미지 로드 대기 중 오류: {e}")
+                print(f"[경고] 이미지 로드 대기 중 오류 (계속 진행): {e}")
             
             # 스크린샷 저장 - 조금씩 스크롤하면서 이미지 로드 후 캡처
             if screenshot_path:
@@ -863,13 +873,20 @@ class YouTubeMobileCrawler(MobileCrawler):
                         self.driver.execute_script(f"window.scrollTo(0, {current_position});")
                         print(f"  [스크롤 {i+1}/{max_scrolls}] 위치: {current_position}px")
                     
-                    # 3단계: 마지막 대기 (모든 이미지 로드 완료)
+                    # 3단계: 마지막 대기 (조건부: 이미지 로드 확인)
                     print("  → 이미지 로드 대기 중...")
-                    time.sleep(3)
+                    try:
+                        # 이미지가 실제로 로드되었는지 확인 (최대 2초)
+                        WebDriverWait(self.driver, 2).until(
+                            lambda d: len([img for img in d.find_elements(By.TAG_NAME, "img") 
+                                          if img.get_attribute('src') and 'http' in img.get_attribute('src')]) > 5
+                        )
+                    except:
+                        pass  # 타임아웃 시 계속 진행
                     
                     # 4단계: 다시 최상단으로 이동
                     self.driver.execute_script("window.scrollTo(0, 0);")
-                    time.sleep(1)
+                    time.sleep(0.5)  # 1초 → 0.5초로 단축
                     
                     # 5단계: 스크린샷 영역 계산 (스크롤한 만큼만)
                     screenshot_height = current_position + 915  # 마지막 스크롤 위치 + 뷰포트 높이
@@ -916,8 +933,14 @@ class YouTubeMobileCrawler(MobileCrawler):
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 scroll_count += 1
                 print(f"  [스크롤 {scroll_count}회] 높이: {current_height}")
-                # 스크롤 후 이미지 로딩을 위한 대기 시간 증가
-                time.sleep(3)
+                # 스크롤 후 이미지 로딩 대기 (최적화: 조건부 대기)
+                try:
+                    # 새로운 컨텐츠가 로드될 때까지만 대기 (최대 1.5초)
+                    WebDriverWait(self.driver, 1.5).until(
+                        lambda d: len(d.find_elements(By.CSS_SELECTOR, "ytm-compact-video-renderer, ytm-reel-item-renderer")) > 0
+                    )
+                except:
+                    time.sleep(0.5)  # 타임아웃 시 짧게 대기
                 
                 # 현재까지 수집된 아이템 개수 체크
                 soup_temp = BeautifulSoup(self.driver.page_source, 'html.parser')
