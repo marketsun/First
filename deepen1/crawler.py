@@ -1365,7 +1365,14 @@ def get_youtube_suggestions(keyword):
         print(f"[DEBUG] 추출된 검색어 개수: {len(suggestions)}")
         print(f"[DEBUG] 검색어 목록: {suggestions}")
         
-        return suggestions[:10]
+        # 원본 키워드 제거 (대소문자 구분 없이, 공백 제거 후 비교)
+        filtered = [
+            s for s in suggestions 
+            if s.strip().lower() != keyword.strip().lower()
+        ]
+        print(f"[DEBUG] 원본 키워드 제거 후: {len(filtered)}개")
+        
+        return filtered[:10]
     except Exception as e:
         print(f"[유튜브 자동완성 오류] {e}")
         import traceback

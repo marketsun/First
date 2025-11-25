@@ -74,8 +74,17 @@ echo 서버를 종료하려면 Ctrl+C를 누르세요.
 echo ================================================
 echo.
 
-REM Flask 서버 실행
-python app.py
+REM Flask 서버를 백그라운드로 실행
+start /B python app.py
+
+REM 서버가 시작될 때까지 대기 (3초)
+timeout /t 3 /nobreak >nul
+
+REM 브라우저 자동 실행
+start http://localhost:5000
+
+REM 서버 프로세스 대기
+wait
 
 REM 서버 종료 시
 echo.
