@@ -27,7 +27,7 @@ class MobileCrawler:
         chrome_options.add_argument(f'user-agent={user_agent}')
         
         # 기타 옵션
-        # chrome_options.add_argument('--headless=new')  # 헤드리스 모드 (디버깅용 비활성화)
+        chrome_options.add_argument('--headless=new')  # 헤드리스 모드 (백그라운드 실행)
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
