@@ -10,6 +10,109 @@ import time
 import re
 from datetime import datetime, timedelta
 from dateutil import parser
+from urllib.parse import urlparse
+
+
+# 언드미디어 도메인 리스트 (Earned Media)
+EARNED_MEDIA_DOMAINS = [
+    # 블로그
+    'blog.naver.com',
+    'tistory.com',
+    'brunch.co.kr',
+    'velog.io',
+    'medium.com',
+    'blogger.com',
+    'wordpress.com',
+    
+    # 카페/커뮤니티
+    'cafe.naver.com',
+    'cafe.daum.net',
+    'instiz.net',
+    'theqoo.net',
+    'clien.net',
+    'dcinside.com',
+    'fmkorea.com',
+    'ilbe.com',
+    'ruliweb.com',
+    'ppomppu.co.kr',
+    
+    # 리뷰/쇼핑 커뮤니티
+    'danawa.com',
+    'enuri.com',
+    'quasarzone.com',
+    
+    # 동영상 플랫폼
+    'youtube.com',
+    'youtu.be',
+    'afreecatv.com',
+    'twitch.tv',
+    
+    # SNS
+    'instagram.com',
+    'facebook.com',
+    'twitter.com',
+    'x.com',
+    
+    # 뉴스/미디어
+    'naver.com/news',
+    'daum.net/news',
+]
+
+
+def classify_media_type(url, keyword=''):
+    """
+    URL을 기반으로 미디어 타입 분류
+    
+    Args:
+        url: 분류할 URL
+        keyword: 검색 키워드 (브랜드 도메인 판별용)
+        
+    Returns:
+        str: 'owned' (온드미디어) 또는 'earned' (언드미디어)
+    """
+    url_lower = url.lower()
+    
+    # 언드미디어 도메인 체크
+    for domain in EARNED_MEDIA_DOMAINS:
+        if domain in url_lower:
+            return 'earned'
+    
+    # 기본값: 온드미디어 (자사 사이트, 쇼핑몰 등)
+    return 'owned'
+
+
+def get_youtube_channel_type(channel_name):
+    """
+    유튜브 채널명으로 공식 채널 여부 판별
+    
+    Args:
+        channel_name: 채널명
+        
+    Returns:
+        str: 'owned' (공식 채널) 또는 'earned' (일반 채널)
+    """
+    if not channel_name:
+        return 'earned'
+    
+    # 공식 채널 키워드
+    official_keywords = [
+        '공식',
+        'official',
+        'korea',
+        '코리아',
+        'global',
+        '글로벌',
+    ]
+    
+    channel_lower = channel_name.lower()
+    
+    # 공식 채널 키워드가 포함되어 있으면 온드미디어
+    for keyword in official_keywords:
+        if keyword in channel_lower:
+            return 'owned'
+    
+    # 기본값: 언드미디어 (일반 사용자 채널)
+    return 'earned'
 
 
 class MobileCrawler:
@@ -527,7 +630,8 @@ class GoogleMobileCrawler(MobileCrawler):
                         'position': len(general_results) + 1,  # 실제 저장되는 결과 기준으로 1부터 순서 부여
                         'result_type': result_type,
                         'published_date': '',
-                        'is_ad': is_ad
+                        'is_ad': is_ad,
+                        'media_type': classify_media_type(url, keyword)
                     })
                     
                     print(f"  [{result_type:6s}] {len(general_results)}. {source:20s} - {title}")
@@ -650,7 +754,8 @@ class GoogleMobileCrawler(MobileCrawler):
                             'position': position,
                             'result_type': '이미지',
                             'published_date': '',
-                            'is_ad': False
+                            'is_ad': False,
+                            'media_type': classify_media_type(url, keyword)
                         })
                         
                         print(f"  ✅ [이미지 {position}] {source} - {title}")
@@ -716,7 +821,8 @@ class GoogleMobileCrawler(MobileCrawler):
                                 'thumbnail': thumbnail,
                                 'result_type': '이미지',
                                 'published_date': '',
-                                'is_ad': False
+                                'is_ad': False,
+                                'media_type': classify_media_type(url, keyword)
                             })
                             
                         except Exception as e:
@@ -1213,6 +1319,7 @@ class YouTubeMobileCrawler(MobileCrawler):
             'upload_timestamp': upload_timestamp,
             'like_count': '',
             'duration': duration,
+            'media_type': get_youtube_channel_type(channel_name),
             'position': 0,
             'is_short': False,
             'short_shelf_index': None,
@@ -1320,6 +1427,7 @@ class YouTubeMobileCrawler(MobileCrawler):
                     'upload_timestamp': upload_timestamp,
                     'like_count': '',
                     'duration': '',
+                    'media_type': get_youtube_channel_type(channel_name),
                     'position': 0,
                     'is_short': True,
                     'is_duplicate': is_duplicate,

@@ -218,8 +218,10 @@ function renderYoutubeResults(data) {
                         displayPosition++;
                     }
                     
+                    const mediaType = result.media_type || 'earned';
+                    
                     return `
-                        <div class="result-table-row">
+                        <div class="result-table-row" data-media-type="${mediaType}">
                             <div class="result-table-cell" style="width: 60px; text-align: center;">${positionText}</div>
                             <div class="result-table-cell" style="width: 100px; ${typeStyle}">${typeLabel}</div>
                             <div class="result-table-cell channel-cell">${result.channel_name || '-'}</div>
@@ -394,13 +396,23 @@ async function loadResults(searchId, filters = {}) {
                             </button>
                         </div>
                     </div>
-                    ${data.google_results.map(result => {
+                    ${data.google_results.map((result, index) => {
                         const typeLabel = result.result_type || '일반';
                         const typeClass = typeLabel === '이미지' ? 'type-cell image' : 'type-cell';
                         const source = result.source || result.snippet || extractDomainName(result.url);
+                        const mediaType = result.media_type || 'earned';
+                        
+                        // 디버깅: 첫 3개 결과의 media_type 출력
+                        if (index < 3) {
+                            console.log(`[API 응답] 구글 결과 ${index + 1}:`, {
+                                title: result.title,
+                                media_type: result.media_type,
+                                mediaType: mediaType
+                            });
+                        }
                         
                         return `
-                            <div class="result-table-row">
+                            <div class="result-table-row" data-media-type="${mediaType}">
                                 <div class="result-table-cell position-cell">${result.position}</div>
                                 <div class="result-table-cell ${typeClass}">${typeLabel}</div>
                                 <div class="result-table-cell source-cell">${source}</div>

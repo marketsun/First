@@ -171,7 +171,8 @@ def perform_crawling(keyword, crawl_id, related_search_enabled=False):
                     position=result.get('position', 0),
                     result_type=result.get('result_type', '일반'),
                     published_date=result.get('published_date', ''),
-                    is_ad=result.get('is_ad', False)
+                    is_ad=result.get('is_ad', False),
+                    media_type=result.get('media_type', 'earned')
                 )
                 db.session.add(google_result)
             
@@ -195,7 +196,8 @@ def perform_crawling(keyword, crawl_id, related_search_enabled=False):
                     position=result.get('position', 0),
                     is_short=result.get('is_short', False),
                     short_shelf_index=result.get('short_shelf_index'),
-                    position_in_shelf=result.get('position_in_shelf')
+                    position_in_shelf=result.get('position_in_shelf'),
+                    media_type=result.get('media_type', 'earned')
                 )
                 db.session.add(youtube_result)
             

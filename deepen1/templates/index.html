@@ -93,6 +93,13 @@
                         </button>
                         <div class="dropdown-menu" id="google-dropdown"></div>
                     </div>
+                    
+                    <!-- 미디어 타입 필터 -->
+                    <div class="media-filter-container">
+                        <button class="filter-btn active" data-source="google" data-filter="all" onclick="filterMediaType('google', 'all')">전체</button>
+                        <button class="filter-btn" data-source="google" data-filter="owned" onclick="filterMediaType('google', 'owned')">온드</button>
+                        <button class="filter-btn" data-source="google" data-filter="earned" onclick="filterMediaType('google', 'earned')">언드</button>
+                    </div>
                 </div>
                 <div id="google-results" class="results-list">
                     <div class="result-table">
@@ -125,6 +132,13 @@
                             <span class="dropdown-arrow">▼</span>
                         </button>
                         <div class="dropdown-menu" id="youtube-dropdown"></div>
+                    </div>
+                    
+                    <!-- 미디어 타입 필터 -->
+                    <div class="media-filter-container">
+                        <button class="filter-btn active" data-source="youtube" data-filter="all" onclick="filterMediaType('youtube', 'all')">전체</button>
+                        <button class="filter-btn" data-source="youtube" data-filter="owned" onclick="filterMediaType('youtube', 'owned')">온드</button>
+                        <button class="filter-btn" data-source="youtube" data-filter="earned" onclick="filterMediaType('youtube', 'earned')">언드</button>
                     </div>
                 </div>
                 <div id="youtube-results" class="results-list">
@@ -429,13 +443,23 @@
                                     </button>
                                 </div>
                             </div>
-                            ${results.map(result => {
+                            ${results.map((result, index) => {
                                 const typeLabel = result.result_type || '일반';
                                 const typeClass = typeLabel === '이미지' ? 'type-cell image' : 'type-cell';
                                 const source = result.source || result.snippet || extractDomainName(result.url);
+                                const mediaType = result.media_type || 'earned';
+                                
+                                // 디버깅: 첫 3개 결과의 media_type 출력
+                                if (index < 3) {
+                                    console.log(`[API 응답] 구글 결과 ${index + 1}:`, {
+                                        title: result.title,
+                                        media_type: result.media_type,
+                                        mediaType: mediaType
+                                    });
+                                }
                                 
                                 return `
-                                    <div class="result-table-row">
+                                    <div class="result-table-row" data-media-type="${mediaType}">
                                         <div class="result-table-cell position-cell">${result.position}</div>
                                         <div class="result-table-cell ${typeClass}">${typeLabel}</div>
                                         <div class="result-table-cell source-cell">${source}</div>
@@ -888,11 +912,24 @@
                     output += '=== 구글 ===\n\n';
                     
                     // 원본 검색어
-                    output += `[${currentKeyword}]\n`;
-                    currentSearchData.google_results.forEach(r => {
-                        output += r.url + '\n';
-                    });
-                    output += `(${currentSearchData.google_results.length}개)\n\n`;
+                    output += `[${currentKeyword}]\n\n`;
+                    
+                    // 온드미디어
+                    const googleOwned = currentSearchData.google_results.filter(r => r.media_type === 'owned');
+                    if (googleOwned.length > 0) {
+                        output += '【온드미디어】\n';
+                        googleOwned.forEach(r => output += r.url + '\n');
+                        output += `(${googleOwned.length}개)\n\n`;
+                    }
+                    
+                    // 언드미디어
+                    const googleEarned = currentSearchData.google_results.filter(r => r.media_type === 'earned');
+                    if (googleEarned.length > 0) {
+                        output += '【언드미디어】\n';
+                        googleEarned.forEach(r => output += r.url + '\n');
+                        output += `(${googleEarned.length}개)\n\n`;
+                    }
+                    
                     totalCount += currentSearchData.google_results.length;
                     
                     // 관련검색어들
@@ -900,11 +937,24 @@
                         currentSearchData.google_related_searches.forEach(keyword => {
                             const relatedData = currentSearchData.google_related_results[keyword];
                             if (relatedData && relatedData.results) {
-                                output += `[${keyword}]\n`;
-                                relatedData.results.forEach(r => {
-                                    output += r.url + '\n';
-                                });
-                                output += `(${relatedData.results.length}개)\n\n`;
+                                output += `[${keyword}]\n\n`;
+                                
+                                // 온드미디어
+                                const relatedOwned = relatedData.results.filter(r => r.media_type === 'owned');
+                                if (relatedOwned.length > 0) {
+                                    output += '【온드미디어】\n';
+                                    relatedOwned.forEach(r => output += r.url + '\n');
+                                    output += `(${relatedOwned.length}개)\n\n`;
+                                }
+                                
+                                // 언드미디어
+                                const relatedEarned = relatedData.results.filter(r => r.media_type === 'earned');
+                                if (relatedEarned.length > 0) {
+                                    output += '【언드미디어】\n';
+                                    relatedEarned.forEach(r => output += r.url + '\n');
+                                    output += `(${relatedEarned.length}개)\n\n`;
+                                }
+                                
                                 totalCount += relatedData.results.length;
                             }
                         });
@@ -914,11 +964,24 @@
                     output += '\n=== 유튜브 ===\n\n';
                     
                     // 원본 검색어
-                    output += `[${currentKeyword}]\n`;
-                    currentSearchData.youtube_results.forEach(r => {
-                        output += r.url + '\n';
-                    });
-                    output += `(${currentSearchData.youtube_results.length}개)\n\n`;
+                    output += `[${currentKeyword}]\n\n`;
+                    
+                    // 온드미디어
+                    const youtubeOwned = currentSearchData.youtube_results.filter(r => r.media_type === 'owned');
+                    if (youtubeOwned.length > 0) {
+                        output += '【온드미디어】\n';
+                        youtubeOwned.forEach(r => output += r.url + '\n');
+                        output += `(${youtubeOwned.length}개)\n\n`;
+                    }
+                    
+                    // 언드미디어
+                    const youtubeEarned = currentSearchData.youtube_results.filter(r => r.media_type === 'earned');
+                    if (youtubeEarned.length > 0) {
+                        output += '【언드미디어】\n';
+                        youtubeEarned.forEach(r => output += r.url + '\n');
+                        output += `(${youtubeEarned.length}개)\n\n`;
+                    }
+                    
                     totalCount += currentSearchData.youtube_results.length;
                     
                     // 관련검색어들
@@ -926,41 +989,101 @@
                         currentSearchData.youtube_related_searches.forEach(keyword => {
                             const relatedData = currentSearchData.youtube_related_results[keyword];
                             if (relatedData && relatedData.results) {
-                                output += `[${keyword}]\n`;
-                                relatedData.results.forEach(r => {
-                                    output += r.url + '\n';
-                                });
-                                output += `(${relatedData.results.length}개)\n\n`;
+                                output += `[${keyword}]\n\n`;
+                                
+                                // 온드미디어
+                                const relatedOwned = relatedData.results.filter(r => r.media_type === 'owned');
+                                if (relatedOwned.length > 0) {
+                                    output += '【온드미디어】\n';
+                                    relatedOwned.forEach(r => output += r.url + '\n');
+                                    output += `(${relatedOwned.length}개)\n\n`;
+                                }
+                                
+                                // 언드미디어
+                                const relatedEarned = relatedData.results.filter(r => r.media_type === 'earned');
+                                if (relatedEarned.length > 0) {
+                                    output += '【언드미디어】\n';
+                                    relatedEarned.forEach(r => output += r.url + '\n');
+                                    output += `(${relatedEarned.length}개)\n\n`;
+                                }
+                                
                                 totalCount += relatedData.results.length;
                             }
                         });
                     }
                     
                 } else {
-                    // 관련검색어 토글 OFF (기존 방식)
-                    const googleLinks = [];
-                    const youtubeLinks = [];
+                    // 관련검색어 토글 OFF (온드/언드 구분 포함)
+                    output += '=== 구글 ===\n\n';
                     
-                    // 구글 결과에서 링크 추출
+                    const googleOwned = [];
+                    const googleEarned = [];
+                    
+                    // 구글 결과에서 링크 추출 (미디어 타입별 구분)
                     const googleRows = document.querySelectorAll('#google-results .result-table-row');
                     googleRows.forEach(row => {
                         const linkElem = row.querySelector('a[href]');
+                        const mediaType = row.dataset.mediaType || 'earned';
                         if (linkElem && linkElem.href) {
-                            googleLinks.push(linkElem.href);
+                            if (mediaType === 'owned') {
+                                googleOwned.push(linkElem.href);
+                            } else {
+                                googleEarned.push(linkElem.href);
+                            }
                         }
                     });
                     
-                    // 유튜브 결과에서 링크 추출
+                    // 온드미디어
+                    if (googleOwned.length > 0) {
+                        output += '【온드미디어】\n';
+                        googleOwned.forEach(link => output += link + '\n');
+                        output += `(${googleOwned.length}개)\n\n`;
+                    }
+                    
+                    // 언드미디어
+                    if (googleEarned.length > 0) {
+                        output += '【언드미디어】\n';
+                        googleEarned.forEach(link => output += link + '\n');
+                        output += `(${googleEarned.length}개)\n\n`;
+                    }
+                    
+                    totalCount += googleOwned.length + googleEarned.length;
+                    
+                    // === 유튜브 ===
+                    output += '\n=== 유튜브 ===\n\n';
+                    
+                    const youtubeOwned = [];
+                    const youtubeEarned = [];
+                    
+                    // 유튜브 결과에서 링크 추출 (미디어 타입별 구분)
                     const youtubeRows = document.querySelectorAll('#youtube-results .result-table-row');
                     youtubeRows.forEach(row => {
                         const linkElem = row.querySelector('a[href]');
+                        const mediaType = row.dataset.mediaType || 'earned';
                         if (linkElem && linkElem.href) {
-                            youtubeLinks.push(linkElem.href);
+                            if (mediaType === 'owned') {
+                                youtubeOwned.push(linkElem.href);
+                            } else {
+                                youtubeEarned.push(linkElem.href);
+                            }
                         }
                     });
                     
-                    output = [...googleLinks, ...youtubeLinks].join('\n');
-                    totalCount = googleLinks.length + youtubeLinks.length;
+                    // 온드미디어
+                    if (youtubeOwned.length > 0) {
+                        output += '【온드미디어】\n';
+                        youtubeOwned.forEach(link => output += link + '\n');
+                        output += `(${youtubeOwned.length}개)\n\n`;
+                    }
+                    
+                    // 언드미디어
+                    if (youtubeEarned.length > 0) {
+                        output += '【언드미디어】\n';
+                        youtubeEarned.forEach(link => output += link + '\n');
+                        output += `(${youtubeEarned.length}개)\n\n`;
+                    }
+                    
+                    totalCount += youtubeOwned.length + youtubeEarned.length;
                 }
                 
                 // 링크가 없으면 알림
@@ -993,6 +1116,67 @@
                 btn.innerHTML = originalText;
                 btn.classList.remove('copied');
             }
+        }
+        
+        // 미디어 타입 필터링
+        function filterMediaType(source, filterType) {
+            console.log(`🔍 필터링: ${source} - ${filterType}`);
+            
+            // 버튼 활성화 상태 변경
+            const buttons = document.querySelectorAll(`.filter-btn[data-source="${source}"]`);
+            buttons.forEach(btn => {
+                if (btn.dataset.filter === filterType) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // 결과 행 필터링
+            const resultsContainer = document.getElementById(`${source}-results`);
+            const rows = resultsContainer.querySelectorAll('.result-table-row');
+            
+            console.log(`📊 총 ${rows.length}개 행 발견`);
+            
+            let visibleCount = 0;
+            const mediaTypeCounts = { owned: 0, earned: 0, undefined: 0 };
+            
+            rows.forEach((row, index) => {
+                const mediaType = row.dataset.mediaType;
+                
+                // 디버깅: 첫 3개 행의 mediaType 출력
+                if (index < 3) {
+                    console.log(`행 ${index + 1}: mediaType = "${mediaType}"`);
+                }
+                
+                // 통계
+                if (mediaType === 'owned') mediaTypeCounts.owned++;
+                else if (mediaType === 'earned') mediaTypeCounts.earned++;
+                else mediaTypeCounts.undefined++;
+                
+                if (filterType === 'all') {
+                    // 전체 표시
+                    row.classList.remove('filtered-hidden');
+                    visibleCount++;
+                } else if (mediaType === filterType) {
+                    // 해당 타입만 표시
+                    row.classList.remove('filtered-hidden');
+                    visibleCount++;
+                } else {
+                    // 숨김
+                    row.classList.add('filtered-hidden');
+                }
+            });
+            
+            console.log(`📊 미디어 타입 분포:`, mediaTypeCounts);
+            
+            // 갯수 업데이트
+            const countElem = document.getElementById(`${source}-count`);
+            if (countElem) {
+                countElem.textContent = visibleCount;
+            }
+            
+            console.log(`✅ ${source} 필터링 완료: ${visibleCount}개 표시`);
         }
     </script>
 </body>

@@ -1429,3 +1429,60 @@ body {
 .dropdown-menu::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.3);
 }
+
+/* 미디어 타입 필터 */
+.media-filter-container {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-left: 12px;
+}
+
+.filter-btn {
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid #E5E8EB;
+    border-radius: 6px;
+    background: #FFFFFF;
+    color: #4E5968;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.filter-btn:hover {
+    background: #F9FAFB;
+    border-color: #3182F6;
+    color: #3182F6;
+}
+
+.filter-btn.active {
+    background: #3182F6;
+    border-color: #3182F6;
+    color: #FFFFFF;
+}
+
+/* 미디어 타입별 색상 구분 */
+.result-table-row[data-media-type="owned"] {
+    background: linear-gradient(to right, rgba(49, 130, 246, 0.05) 0%, transparent 100%);
+    border-left: 3px solid #3182F6;
+}
+
+.result-table-row[data-media-type="earned"] {
+    background: linear-gradient(to right, rgba(16, 185, 129, 0.05) 0%, transparent 100%);
+    border-left: 3px solid #10B981;
+}
+
+.result-table-row[data-media-type="owned"]:hover {
+    background: linear-gradient(to right, rgba(49, 130, 246, 0.08) 0%, transparent 100%);
+}
+
+.result-table-row[data-media-type="earned"]:hover {
+    background: linear-gradient(to right, rgba(16, 185, 129, 0.08) 0%, transparent 100%);
+}
+
+/* 필터링으로 숨겨진 행 */
+.result-table-row.filtered-hidden {
+    display: none !important;
+}

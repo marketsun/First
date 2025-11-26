@@ -55,6 +55,7 @@ class GoogleResult(db.Model):
     result_type = db.Column(db.String(20), default='일반')  # 타입: 일반/이미지
     published_date = db.Column(db.String(100))  # 게시일 (있는 경우)
     is_ad = db.Column(db.Boolean, default=False)  # 광고 여부
+    media_type = db.Column(db.String(20), default='earned')  # 미디어 타입: owned/earned
     
     def to_dict(self):
         return {
@@ -67,7 +68,8 @@ class GoogleResult(db.Model):
             'position': self.position,
             'result_type': self.result_type,
             'published_date': self.published_date,
-            'is_ad': self.is_ad
+            'is_ad': self.is_ad,
+            'media_type': self.media_type
         }
 
 
@@ -93,6 +95,7 @@ class YouTubeResult(db.Model):
     is_short = db.Column(db.Boolean, default=False)  # Shorts 여부
     short_shelf_index = db.Column(db.Integer, nullable=True)  # Shorts 구간 번호 (1, 2, ...)
     position_in_shelf = db.Column(db.Integer, nullable=True)  # 구간 내 순서 (1~5)
+    media_type = db.Column(db.String(20), default='earned')  # 미디어 타입: owned/earned
     
     def to_dict(self):
         return {
@@ -111,7 +114,8 @@ class YouTubeResult(db.Model):
             'position': self.position,
             'is_short': self.is_short,
             'short_shelf_index': self.short_shelf_index,
-            'position_in_shelf': self.position_in_shelf
+            'position_in_shelf': self.position_in_shelf,
+            'media_type': self.media_type
         }
 
 
