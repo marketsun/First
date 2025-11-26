@@ -11,7 +11,10 @@
     <header class="header">
         <div class="header-content">
             <h1 class="logo">🔍 검색 크롤러</h1>
-            <a href="/history" class="history-link">검색 기록</a>
+            <div class="header-actions">
+                <a href="/history" class="history-link">검색 기록</a>
+                <button class="settings-btn" onclick="openSettingsModal()">⚙️ 설정</button>
+            </div>
         </div>
     </header>
 
@@ -1178,6 +1181,187 @@
             
             console.log(`✅ ${source} 필터링 완료: ${visibleCount}개 표시`);
         }
+
+        // ==================== 온드미디어 설정 ====================
+        
+        // 설정 모달 열기
+        function openSettingsModal() {
+            document.getElementById('settings-modal').style.display = 'flex';
+            loadOwnedMediaSettings();
+        }
+        
+        // 설정 모달 닫기
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').style.display = 'none';
+        }
+        
+        // 설정 불러오기
+        function loadOwnedMediaSettings() {
+            const domains = JSON.parse(localStorage.getItem('ownedDomains') || '[]');
+            const channels = JSON.parse(localStorage.getItem('ownedChannels') || '[]');
+            
+            const domainList = document.getElementById('owned-domains-list');
+            const channelList = document.getElementById('owned-channels-list');
+            
+            // 도메인 목록 렌더링
+            domainList.innerHTML = domains.map((domain, index) => `
+                <div class="settings-item">
+                    <span>${domain}</span>
+                    <button class="remove-btn" onclick="removeDomain(${index})">×</button>
+                </div>
+            `).join('');
+            
+            // 채널 목록 렌더링
+            channelList.innerHTML = channels.map((channel, index) => `
+                <div class="settings-item">
+                    <span>${channel}</span>
+                    <button class="remove-btn" onclick="removeChannel(${index})">×</button>
+                </div>
+            `).join('');
+        }
+        
+        // 도메인 추가
+        function addDomain() {
+            const input = document.getElementById('domain-input');
+            const domain = input.value.trim();
+            
+            if (!domain) {
+                alert('도메인을 입력하세요.');
+                return;
+            }
+            
+            const domains = JSON.parse(localStorage.getItem('ownedDomains') || '[]');
+            
+            if (domains.includes(domain)) {
+                alert('이미 등록된 도메인입니다.');
+                return;
+            }
+            
+            domains.push(domain);
+            localStorage.setItem('ownedDomains', JSON.stringify(domains));
+            input.value = '';
+            loadOwnedMediaSettings();
+        }
+        
+        // 도메인 삭제
+        function removeDomain(index) {
+            const domains = JSON.parse(localStorage.getItem('ownedDomains') || '[]');
+            domains.splice(index, 1);
+            localStorage.setItem('ownedDomains', JSON.stringify(domains));
+            loadOwnedMediaSettings();
+        }
+        
+        // 채널 추가
+        function addChannel() {
+            const input = document.getElementById('channel-input');
+            const channel = input.value.trim();
+            
+            if (!channel) {
+                alert('채널명을 입력하세요.');
+                return;
+            }
+            
+            const channels = JSON.parse(localStorage.getItem('ownedChannels') || '[]');
+            
+            if (channels.includes(channel)) {
+                alert('이미 등록된 채널입니다.');
+                return;
+            }
+            
+            channels.push(channel);
+            localStorage.setItem('ownedChannels', JSON.stringify(channels));
+            input.value = '';
+            loadOwnedMediaSettings();
+        }
+        
+        // 채널 삭제
+        function removeChannel(index) {
+            const channels = JSON.parse(localStorage.getItem('ownedChannels') || '[]');
+            channels.splice(index, 1);
+            localStorage.setItem('ownedChannels', JSON.stringify(channels));
+            loadOwnedMediaSettings();
+        }
+        
+        // 설정 저장 (닫기)
+        function saveSettings() {
+            alert('설정이 저장되었습니다.\n다음 검색부터 적용됩니다.');
+            closeSettingsModal();
+        }
+        
+        // Enter 키로 추가
+        document.addEventListener('DOMContentLoaded', function() {
+            const domainInput = document.getElementById('domain-input');
+            const channelInput = document.getElementById('channel-input');
+            
+            if (domainInput) {
+                domainInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') addDomain();
+                });
+            }
+            
+            if (channelInput) {
+                channelInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') addChannel();
+                });
+            }
+        });
     </script>
+    
+    <!-- 설정 모달 -->
+    <div id="settings-modal" class="settings-modal">
+        <div class="settings-modal-content">
+            <div class="settings-modal-header">
+                <h2>⚙️ 온드미디어 설정</h2>
+                <button class="close-btn" onclick="closeSettingsModal()">×</button>
+            </div>
+            
+            <div class="settings-modal-body">
+                <!-- 도메인 설정 -->
+                <div class="settings-section">
+                    <h3>📌 온드미디어 도메인 목록</h3>
+                    <p class="settings-description">등록된 도메인을 포함하는 URL은 온드미디어로 분류됩니다.</p>
+                    
+                    <div class="settings-input-group">
+                        <input 
+                            type="text" 
+                            id="domain-input" 
+                            class="settings-input" 
+                            placeholder="예: samsung.com, moadamda.com"
+                        >
+                        <button class="add-btn" onclick="addDomain()">+ 추가</button>
+                    </div>
+                    
+                    <div id="owned-domains-list" class="settings-list">
+                        <!-- 도메인 목록이 여기에 렌더링됩니다 -->
+                    </div>
+                </div>
+                
+                <!-- 채널 설정 -->
+                <div class="settings-section">
+                    <h3>📺 유튜브 온드 채널명</h3>
+                    <p class="settings-description">등록된 채널명을 포함하는 유튜브 채널은 온드미디어로 분류됩니다.</p>
+                    
+                    <div class="settings-input-group">
+                        <input 
+                            type="text" 
+                            id="channel-input" 
+                            class="settings-input" 
+                            placeholder="예: 삼성전자, 모아담다 공식"
+                        >
+                        <button class="add-btn" onclick="addChannel()">+ 추가</button>
+                    </div>
+                    
+                    <div id="owned-channels-list" class="settings-list">
+                        <!-- 채널 목록이 여기에 렌더링됩니다 -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-modal-footer">
+                <button class="cancel-btn" onclick="closeSettingsModal()">취소</button>
+                <button class="save-btn" onclick="saveSettings()">저장</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

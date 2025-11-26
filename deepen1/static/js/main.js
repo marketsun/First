@@ -37,6 +37,40 @@ function extractDomainName(url) {
     }
 }
 
+// 동적 media_type 분류 (로컬스토리지 설정 기반)
+function classifyMediaType(url, channelName = '') {
+    const ownedDomains = JSON.parse(localStorage.getItem('ownedDomains') || '[]');
+    const ownedChannels = JSON.parse(localStorage.getItem('ownedChannels') || '[]');
+    
+    // URL 도메인 체크
+    if (url) {
+        try {
+            const urlObj = new URL(url);
+            const domain = urlObj.hostname.replace(/^www\./, '');
+            
+            // 등록된 도메인과 매칭 (부분 매칭)
+            for (const ownedDomain of ownedDomains) {
+                if (domain.includes(ownedDomain) || ownedDomain.includes(domain)) {
+                    return 'owned';
+                }
+            }
+        } catch (e) {
+            // URL 파싱 실패 시 무시
+        }
+    }
+    
+    // 유튜브 채널명 체크
+    if (channelName) {
+        for (const ownedChannel of ownedChannels) {
+            if (channelName.includes(ownedChannel) || ownedChannel.includes(channelName)) {
+                return 'owned';
+            }
+        }
+    }
+    
+    return 'earned';
+}
+
 // 전역 변수: 원본 유튜브 데이터 저장
 let originalYoutubeData = [];
 
@@ -218,7 +252,8 @@ function renderYoutubeResults(data) {
                         displayPosition++;
                     }
                     
-                    const mediaType = result.media_type || 'earned';
+                    // 동적 media_type 분류 (로컬스토리지 설정 기반)
+                    const mediaType = classifyMediaType(result.url, result.channel_name);
                     
                     return `
                         <div class="result-table-row" data-media-type="${mediaType}">
@@ -400,13 +435,15 @@ async function loadResults(searchId, filters = {}) {
                         const typeLabel = result.result_type || '일반';
                         const typeClass = typeLabel === '이미지' ? 'type-cell image' : 'type-cell';
                         const source = result.source || result.snippet || extractDomainName(result.url);
-                        const mediaType = result.media_type || 'earned';
+                        
+                        // 동적 media_type 분류 (로컬스토리지 설정 기반)
+                        const mediaType = classifyMediaType(result.url);
                         
                         // 디버깅: 첫 3개 결과의 media_type 출력
                         if (index < 3) {
                             console.log(`[API 응답] 구글 결과 ${index + 1}:`, {
                                 title: result.title,
-                                media_type: result.media_type,
+                                url: result.url,
                                 mediaType: mediaType
                             });
                         }
