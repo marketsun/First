@@ -149,12 +149,12 @@
                         <div class="result-table-header">
                             <div class="result-table-cell" style="width: 60px;">순서</div>
                             <div class="result-table-cell" style="width: 100px;">타입</div>
-                            <div class="result-table-cell channel-cell">채널명</div>
+                            <div class="result-table-cell channel-cell">채널</div>
                             <div class="result-table-cell date-cell sortable" onclick="toggleYoutubeSort('date')">
-                                업로드일 <span class="sort-icon active">↓</span><span class="sort-icon">↑</span>
+                                날짜 <span class="sort-icon active">↓</span><span class="sort-icon">↑</span>
                             </div>
                             <div class="result-table-cell views-cell sortable" onclick="toggleYoutubeSort('views')">
-                                조회수 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
+                                조회 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
                             </div>
                             <div class="result-table-cell title-cell">제목</div>
                             <div class="result-table-cell action-cell" style="margin-left: auto;">
@@ -173,7 +173,7 @@
 
     <!-- 로그 버튼 (우측 하단 고정) -->
     <button class="log-button" onclick="toggleLogModal()" title="크롤링 로그">
-        📋
+        로그
     </button>
 
     <!-- 로그 플로팅 창 -->
@@ -553,12 +553,12 @@
                     <div class="result-table-header">
                         <div class="result-table-cell" style="width: 60px;">순서</div>
                         <div class="result-table-cell" style="width: 100px;">타입</div>
-                        <div class="result-table-cell channel-cell">채널명</div>
+                        <div class="result-table-cell channel-cell">채널</div>
                         <div class="result-table-cell date-cell sortable" onclick="toggleYoutubeSort('date')">
-                            업로드일 <span class="sort-icon active">↓</span><span class="sort-icon">↑</span>
+                            날짜 <span class="sort-icon active">↓</span><span class="sort-icon">↑</span>
                         </div>
                         <div class="result-table-cell views-cell sortable" onclick="toggleYoutubeSort('views')">
-                            조회수 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
+                            조회 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
                         </div>
                         <div class="result-table-cell title-cell">제목</div>
                         <div class="result-table-cell action-cell" style="margin-left: auto;">
@@ -1288,7 +1288,7 @@
             closeSettingsModal();
         }
         
-        // Enter 키로 추가
+        // Enter 키로 추가, ESC 키로 모달 닫기
         document.addEventListener('DOMContentLoaded', function() {
             const domainInput = document.getElementById('domain-input');
             const channelInput = document.getElementById('channel-input');
@@ -1304,6 +1304,26 @@
                     if (e.key === 'Enter') addChannel();
                 });
             }
+            
+            // ESC 키로 설정 모달 닫기
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const settingsModal = document.getElementById('settings-modal');
+                    if (settingsModal && settingsModal.style.display === 'flex') {
+                        closeSettingsModal();
+                    }
+                }
+            });
+            
+            // 모달 배경 클릭 시 닫기
+            const settingsModal = document.getElementById('settings-modal');
+            if (settingsModal) {
+                settingsModal.addEventListener('click', function(e) {
+                    if (e.target === settingsModal) {
+                        closeSettingsModal();
+                    }
+                });
+            }
         });
     </script>
     
@@ -1316,43 +1336,50 @@
             </div>
             
             <div class="settings-modal-body">
-                <!-- 도메인 설정 -->
-                <div class="settings-section">
-                    <h3>📌 온드미디어 도메인 목록</h3>
-                    <p class="settings-description">등록된 도메인을 포함하는 URL은 온드미디어로 분류됩니다.</p>
-                    
-                    <div class="settings-input-group">
-                        <input 
-                            type="text" 
-                            id="domain-input" 
-                            class="settings-input" 
-                            placeholder="예: samsung.com, moadamda.com"
-                        >
-                        <button class="add-btn" onclick="addDomain()">+ 추가</button>
+                <!-- 2단 그리드 레이아웃 -->
+                <div class="settings-grid">
+                    <!-- 도메인 설정 (왼쪽) -->
+                    <div class="settings-section">
+                        <h3>📌 도메인</h3>
+                        
+                        <div class="settings-input-group">
+                            <div class="input-wrapper">
+                                <input 
+                                    type="text" 
+                                    id="domain-input" 
+                                    class="settings-input" 
+                                    placeholder="예: samsung.com"
+                                >
+                                <span class="input-hint">(Enter)</span>
+                            </div>
+                            <button class="add-btn" onclick="addDomain()">+</button>
+                        </div>
+                        
+                        <div id="owned-domains-list" class="settings-list">
+                            <!-- 도메인 목록이 여기에 렌더링됩니다 -->
+                        </div>
                     </div>
                     
-                    <div id="owned-domains-list" class="settings-list">
-                        <!-- 도메인 목록이 여기에 렌더링됩니다 -->
-                    </div>
-                </div>
-                
-                <!-- 채널 설정 -->
-                <div class="settings-section">
-                    <h3>📺 유튜브 온드 채널명</h3>
-                    <p class="settings-description">등록된 채널명을 포함하는 유튜브 채널은 온드미디어로 분류됩니다.</p>
-                    
-                    <div class="settings-input-group">
-                        <input 
-                            type="text" 
-                            id="channel-input" 
-                            class="settings-input" 
-                            placeholder="예: 삼성전자, 모아담다 공식"
-                        >
-                        <button class="add-btn" onclick="addChannel()">+ 추가</button>
-                    </div>
-                    
-                    <div id="owned-channels-list" class="settings-list">
-                        <!-- 채널 목록이 여기에 렌더링됩니다 -->
+                    <!-- 채널 설정 (오른쪽) -->
+                    <div class="settings-section">
+                        <h3>📺 채널명</h3>
+                        
+                        <div class="settings-input-group">
+                            <div class="input-wrapper">
+                                <input 
+                                    type="text" 
+                                    id="channel-input" 
+                                    class="settings-input" 
+                                    placeholder="예: 삼성전자"
+                                >
+                                <span class="input-hint">(Enter)</span>
+                            </div>
+                            <button class="add-btn" onclick="addChannel()">+</button>
+                        </div>
+                        
+                        <div id="owned-channels-list" class="settings-list">
+                            <!-- 채널 목록이 여기에 렌더링됩니다 -->
+                        </div>
                     </div>
                 </div>
             </div>

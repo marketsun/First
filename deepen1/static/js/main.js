@@ -213,14 +213,14 @@ function renderYoutubeResults(data) {
         youtubeResults.innerHTML = `
             <div class="result-table">
                 <div class="result-table-header">
-                    <div class="result-table-cell" style="width: 60px;">순서</div>
-                    <div class="result-table-cell" style="width: 100px;">타입</div>
-                    <div class="result-table-cell channel-cell">채널명</div>
+                    <div class="result-table-cell position-cell">순서</div>
+                    <div class="result-table-cell type-cell">타입</div>
+                    <div class="result-table-cell channel-cell">채널</div>
                     <div class="result-table-cell date-cell sortable" onclick="toggleYoutubeSort('date')">
-                        업로드일 ${getDateSortIcon()}
+                        날짜 ${getDateSortIcon()}
                     </div>
                     <div class="result-table-cell views-cell sortable" onclick="toggleYoutubeSort('views')">
-                        조회수 ${getViewsSortIcon()}
+                        조회 ${getViewsSortIcon()}
                     </div>
                     <div class="result-table-cell title-cell">제목</div>
                     <div class="result-table-cell action-cell" style="margin-left: auto;">
@@ -257,8 +257,8 @@ function renderYoutubeResults(data) {
                     
                     return `
                         <div class="result-table-row" data-media-type="${mediaType}">
-                            <div class="result-table-cell" style="width: 60px; text-align: center;">${positionText}</div>
-                            <div class="result-table-cell" style="width: 100px; ${typeStyle}">${typeLabel}</div>
+                            <div class="result-table-cell position-cell" style="text-align: center;">${positionText}</div>
+                            <div class="result-table-cell type-cell" style="${typeStyle}">${typeLabel}</div>
                             <div class="result-table-cell channel-cell">${result.channel_name || '-'}</div>
                             <div class="result-table-cell date-cell">${result.upload_date || '-'}</div>
                             <div class="result-table-cell views-cell">${result.view_count || '-'}</div>
@@ -274,14 +274,14 @@ function renderYoutubeResults(data) {
         youtubeResults.innerHTML = `
             <div class="result-table">
                 <div class="result-table-header">
-                    <div class="result-table-cell" style="width: 60px;">순서</div>
-                    <div class="result-table-cell" style="width: 100px;">타입</div>
-                    <div class="result-table-cell channel-cell">채널명</div>
+                    <div class="result-table-cell position-cell">순서</div>
+                    <div class="result-table-cell type-cell">타입</div>
+                    <div class="result-table-cell channel-cell">채널</div>
                     <div class="result-table-cell date-cell sortable" onclick="toggleYoutubeSort('date')">
-                        업로드일 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
+                        날짜 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
                     </div>
                     <div class="result-table-cell views-cell sortable" onclick="toggleYoutubeSort('views')">
-                        조회수 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
+                        조회 <span class="sort-icon">↓</span><span class="sort-icon">↑</span>
                     </div>
                     <div class="result-table-cell title-cell">제목</div>
                     <div class="result-table-cell action-cell" style="margin-left: auto;">
